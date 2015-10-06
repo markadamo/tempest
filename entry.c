@@ -15,12 +15,13 @@ cl_mem GPU_MASS_CO;
 // global kernels
 cl_kernel __gpu_build;
 cl_kernel __gpu_transform;
+cl_kernel __gpu_transform_local;
 cl_kernel __gpu_score;
 cl_kernel __gpu_score_reduction;
 cl_kernel __cl_memset;
 
-std::vector<cl_ulong> scoreStart;
-std::vector<cl_ulong> scoreEnd;
+std::map<long, cl_mem> spectrum2buffer;
+
 cl_event scoreEvent = clCreateUserEvent(clContext, NULL);
 cl_event reduceEvent = clCreateUserEvent(clContext, NULL);
 cl_event buildEvent = clCreateUserEvent(clContext, NULL);
@@ -32,7 +33,9 @@ long totalBuildTime = 0;
 long totalTransformTime = 0;
 long totalMemsetTime = 0;
 long totalSendTime = 0;
+long buildLaunches = 0;
 long scoreKernelLaunches = 0;
+long lastBuildIndex = -1;
 
 //=================================================================================================
 // Entry Functions
@@ -89,7 +92,6 @@ void setup_constant_memory() {
 
     err  = clSetKernelArg(__gpu_score, 2, sizeof(cl_mem), &cl_cCandidates);
     err |= clSetKernelArg(__gpu_score, 3, sizeof(cl_mem), &cl_fScores);
-    err |= clSetKernelArg(__gpu_score, 4, sizeof(cl_mem), &cl_fSpectra);
     err |= clSetKernelArg(__gpu_score, 6, sizeof(cl_mem), &GPU_MASS_AA);
     err |= clSetKernelArg(__gpu_score, 7, sizeof(cl_mem), &GPU_MASS_PROTON);
     err |= clSetKernelArg(__gpu_score, 8, sizeof(cl_mem), &cl_nlValuesNterm);
@@ -106,6 +108,9 @@ void create_kernels() {
     check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
     
     __gpu_transform = clCreateKernel(clProgram, "gpu_transform", &err);
+    check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
+
+    __gpu_transform_local = clCreateKernel(clProgram, "gpu_transform_local", &err);
     check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
     
     __gpu_score = clCreateKernel(clProgram, "gpu_score", &err);
@@ -144,36 +149,83 @@ void gpu_score_candidates(eObj *e)
 	check_cl_error(__FILE__, __LINE__, err, "Unable to copy candidate data from host to GPU");
 	
     stGlobalDim = mround(host_iPeakCounts[e->lIndex], BLOCKDIM_BUILD);
+    cl_mem spectrumBuffer;
 
-    err = clEnqueueCopyBuffer(clCommandQueue, cl_init_fSpectra, cl_fSpectra, 0, 0, tempest.iNumMS2Bins*sizeof(float), 0, NULL, PROFILE ? &memsetEvent : NULL);
-    if (PROFILE) {
-        clFinish(clCommandQueue);
-        clGetEventProfilingInfo(memsetEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-        clGetEventProfilingInfo(memsetEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
-        totalMemsetTime += (end-start);
-        clReleaseEvent(memsetEvent);
+    std::map<long,cl_mem>::iterator s2bElem = spectrum2buffer.find(e->lIndex);
+    if (s2bElem == spectrum2buffer.end()) { //spectrum not cached
+        if (!unusedBuffers.empty()) {
+            spectrumBuffer = unusedBuffers.top();
+            unusedBuffers.pop();
+        }
+        else {
+            spectrumBuffer = spectrum2buffer.begin()->second;
+            spectrum2buffer.erase(spectrum2buffer.begin());
+        }
+        spectrum2buffer[e->lIndex] = spectrumBuffer;
+
+        //initialize buffer
+        err = clEnqueueCopyBuffer(clCommandQueue, cl_init_fSpectra, spectrumBuffer, 0, 0, tempest.iNumMS2Bins*sizeof(cl_float), 0, NULL, PROFILE ? &memsetEvent : NULL);
+        //check_cl_error(__FILE__, __LINE__, err, "Unable to clear spectrum memory");
+        if (err != 0) {
+            //memory cap reached. Stop filling new buffers.
+            unusedBuffers = std::stack<cl_mem>();
+            spectrumBuffer = spectrum2buffer.begin()->second;
+            spectrum2buffer.erase(spectrum2buffer.begin());
+            spectrum2buffer[e->lIndex] = spectrumBuffer;
+            err = clEnqueueCopyBuffer(clCommandQueue, cl_init_fSpectra, spectrumBuffer, 0, 0, tempest.iNumMS2Bins*sizeof(cl_float), 0, NULL, PROFILE ? &memsetEvent : NULL);
+            check_cl_error(__FILE__, __LINE__, err, "Unable to clear spectrum memory");
+        }
+        if (PROFILE) {
+            clFinish(clCommandQueue);
+            clGetEventProfilingInfo(memsetEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+            clGetEventProfilingInfo(memsetEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
+            totalMemsetTime += (end-start);
+            clReleaseEvent(memsetEvent);
+        }
+        
+        // build
+        err  = clSetKernelArg(__gpu_build, 0, sizeof(cl_mem), &spectrumBuffer);
+        err |= clSetKernelArg(__gpu_build, 1, sizeof(long), &lNoOffset);
+        err |= clSetKernelArg(__gpu_build, 2, sizeof(int), &(host_iPeakCounts[e->lIndex]));
+        err |= clSetKernelArg(__gpu_build, 5, sizeof(long), &(host_lPeakIndices[e->lIndex]));
+        err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_build, 1, NULL, &stGlobalDim, &BLOCKDIM_BUILD, 0, NULL, PROFILE ? &buildEvent : NULL);
+        check_cl_error(__FILE__, __LINE__, err, "Could not build spectrum (gpu_build kernel)");
+        if (PROFILE) {
+            clFinish(clCommandQueue);
+            clGetEventProfilingInfo(buildEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+            clGetEventProfilingInfo(buildEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
+            totalBuildTime += (end-start);
+            buildLaunches += 1;
+            clReleaseEvent(buildEvent);
+        }
+
+        // transform
+        if (params.bCrossCorrelation) {
+            size_t localDim = CROSS_CORRELATION_WINDOW * 2;
+            size_t globalDim = localDim * tempest.iNumMS2Bins;
+            err  = clSetKernelArg(__gpu_transform, 0, sizeof(cl_mem), &spectrumBuffer);
+            err |= clSetKernelArg(__gpu_transform, 1, sizeof(long), &lNoOffset);
+            err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_transform, 1, NULL, &globalDim, &localDim, 0, NULL, PROFILE ? & transformEvent : NULL);
+            if (PROFILE) {
+                clFinish(clCommandQueue);
+                clGetEventProfilingInfo(transformEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+                clGetEventProfilingInfo(transformEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
+                totalTransformTime += (end-start);
+                clReleaseEvent(transformEvent);
+            }
+        }
     }
-
-    // build
-    err  = clSetKernelArg(__gpu_build, 0, sizeof(cl_mem), &cl_fSpectra);
-    err |= clSetKernelArg(__gpu_build, 1, sizeof(long), &lNoOffset);
-    err |= clSetKernelArg(__gpu_build, 2, sizeof(int), &(host_iPeakCounts[e->lIndex]));
-    err |= clSetKernelArg(__gpu_build, 5, sizeof(long), &(host_lPeakIndices[e->lIndex]));
-    err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_build, 1, NULL, &stGlobalDim, &BLOCKDIM_BUILD, 0, NULL, PROFILE ? &buildEvent : NULL);
-    check_cl_error(__FILE__, __LINE__, err, "Could not build spectrum (gpu_build kernel)");
-    if (PROFILE) {
-        clFinish(clCommandQueue);
-        clGetEventProfilingInfo(buildEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-        clGetEventProfilingInfo(buildEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
-        totalBuildTime += (end-start);
-        clReleaseEvent(buildEvent);
+    else {
+        //move spectrum entry to end of map by reinserting
+        spectrumBuffer = s2bElem->second;
+        spectrum2buffer.erase(s2bElem);
+        spectrum2buffer[e->lIndex] = spectrumBuffer;
     }
-
-    // transform
         
     // score
     err  = clSetKernelArg(__gpu_score, 0, sizeof(int), &(e->iPrecursorCharge));
     err |= clSetKernelArg(__gpu_score, 1, sizeof(int), &(e->iNumBufferedCandidates));
+    err |= clSetKernelArg(__gpu_score, 4, sizeof(cl_mem), &spectrumBuffer);
     err |= clSetKernelArg(__gpu_score, 5, sizeof(long), &lNoOffset);
     err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_score, 1, NULL, &DEFAULT_CANDIDATE_BUFFER_SIZE, &DEFAULT_BLOCKDIM_SCORE, 0, NULL, PROFILE ? &scoreEvent : NULL);
     check_cl_error(__FILE__, __LINE__, err, "Could not score candidates (gpu_score kernel)");

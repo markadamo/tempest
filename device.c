@@ -24,6 +24,7 @@ cl_mem cl_fNextScores;
 cl_mem cl_nlValuesNterm;
 cl_mem cl_nlValuesCterm;
 cl_mem cl_nlValuesAA;
+std::stack<cl_mem> unusedBuffers;
 
 cl_context clContext;
 cl_platform_id clPlatformID;
@@ -73,7 +74,7 @@ extern void initialize_device() {
     
     char buffer[10240];
     clGetDeviceInfo(clDeviceID, CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
-    printf("  Using %s\n", buffer);
+    printf(" » Using %s\n", buffer);
 
     //create context
     clContext = clCreateContext(NULL, 1, devices+config.iDevice, NULL, NULL, &err);
@@ -107,11 +108,19 @@ extern void setup_device() {
     size_t zMemScore_prebuilt, zMemScore_peaks, zMemScore_peaks_shared;
     int err;
     
-    err = clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_MEM_ALLOC_SIZE,   sizeof(cl_ulong), &(cl_info.lMaxMemAllocSize), NULL);
-    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_GLOBAL_MEM_SIZE,     sizeof(cl_ulong), &(cl_info.lGlobalMemSize), NULL);
-    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_COMPUTE_UNITS,   sizeof(cl_uint),  &(cl_info.iMaxComputeUnits), NULL);
-    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_WORK_GROUP_SIZE,  sizeof(cl_ulong),  &(cl_info.lMaxWorkGroupSize), NULL);
+    err  = clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_MEM_ALLOC_SIZE,  sizeof(cl_ulong), &(cl_info.lMaxMemAllocSize),  NULL);
+    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_ADDRESS_BITS,        sizeof(cl_uint),  &(cl_info.iAddressBits),      NULL);
+    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_HOST_UNIFIED_MEMORY, sizeof(cl_bool),  &(cl_info.bUnifiedMemory),      NULL); 
+    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_GLOBAL_MEM_SIZE,     sizeof(cl_ulong), &(cl_info.lGlobalMemSize),    NULL);  
+    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_COMPUTE_UNITS,   sizeof(cl_uint),  &(cl_info.iMaxComputeUnits),  NULL);
+    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(cl_ulong), &(cl_info.lMaxWorkGroupSize), NULL);
     check_cl_error(__FILE__, __LINE__, err, "Unable to get OpenCL device attributes");
+
+    //limit global memory size to addressable memory (e.g. NVidia may list more than is addressable)
+    if (cl_info.iAddressBits == 32)
+        if (cl_info.lGlobalMemSize > pow(2, 32))
+            cl_info.lGlobalMemSize = pow(2, 32);
+    
     MAX_BLOCKDIM = cl_info.lMaxWorkGroupSize;
     //DEFAULT_BLOCKDIM_SCORE = cl_info.lMaxWorkGroupSize > DEFAULT_CANDIDATE_BUFFER_SIZE ? DEFAULT_CANDIDATE_BUFFER_SIZE : cl_info.lMaxWorkGroupSize;
     //BLOCKDIM_BUILD = cl_info.lMaxWorkGroupSize;
@@ -128,9 +137,11 @@ extern void setup_device() {
     // Determine Configuration
     
     // peaks
-    cl_iPeakBins = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, tempest.lNumMS2Peaks * sizeof(int), &(host_iPeakBins[0]), &err);
+    size_t size_iPeakBins = tempest.lNumMS2Peaks * sizeof(cl_int);
+    size_t size_fPeakInts = tempest.lNumMS2Peaks * sizeof(cl_float);
+    cl_iPeakBins = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_iPeakBins, &(host_iPeakBins[0]), &err);
     check_cl_error(__FILE__, __LINE__, err, "Unable to allocate device memory for peak bins.");
-    cl_fPeakInts = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, tempest.lNumMS2Peaks * sizeof(float), &(host_fPeakInts[0]), &err);
+    cl_fPeakInts = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_fPeakInts, &(host_fPeakInts[0]), &err);
     check_cl_error(__FILE__, __LINE__, err, "Unable to allocate device memory for peak intensities.");
     
     // cleanup host
@@ -138,22 +149,48 @@ extern void setup_device() {
     std::vector<float>().swap(host_fPeakInts);
 
     //cudaMalloc((void**) &gpu_fSpectra, tempest.iNumMS2Bins * sizeof(float));
-    cl_fSpectra = clCreateBuffer(clContext, CL_MEM_READ_WRITE, tempest.iNumMS2Bins * sizeof(float), NULL, &err);
+    //cl_fSpectra = clCreateBuffer(clContext, CL_MEM_READ_WRITE, tempest.iNumMS2Bins * sizeof(float), NULL, &err);
     float * init_fSpectra = (float *) calloc(tempest.iNumMS2Bins, sizeof(float));
-    cl_init_fSpectra = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, tempest.iNumMS2Bins * sizeof(float), init_fSpectra, &err);
+    size_t size_init_fSpectra = tempest.iNumMS2Bins * sizeof(cl_float);
+    cl_init_fSpectra = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_init_fSpectra, init_fSpectra, &err);
     free(init_fSpectra);
     
     // candidate and results
     mObj * init_mPSMs = (mObj *) calloc(tempest.iNumSpectra * params.iNumOutputPSMs, sizeof(mObj)); 
     float * init_fNextScores = (float *) calloc(tempest.iNumSpectra, sizeof(float));
-    cl_cCandidates = clCreateBuffer(clContext, CL_MEM_READ_ONLY, sizeof(cObj)  * config.iCandidateBufferSize, NULL, &err);
-    cl_fScores = clCreateBuffer(clContext, CL_MEM_READ_WRITE, sizeof(float)  * config.iCandidateBufferSize, NULL, &err);  
-    cl_mPSMs = clCreateBuffer(clContext, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(mObj)  * tempest.iNumSpectra * params.iNumOutputPSMs, init_mPSMs, &err);
-    cl_fNextScores = clCreateBuffer(clContext, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(float) * tempest.iNumSpectra, init_fNextScores, &err);
+    size_t size_cCandidates = sizeof(cObj) * config.iCandidateBufferSize;
+    size_t size_fScores = sizeof(cl_float)  * config.iCandidateBufferSize;
+    size_t size_mPSMs = sizeof(mObj)  * tempest.iNumSpectra * params.iNumOutputPSMs;
+    size_t size_fNextScores = sizeof(float) * tempest.iNumSpectra;
+    cl_cCandidates = clCreateBuffer(clContext, CL_MEM_READ_ONLY, size_cCandidates, NULL, &err);
+    cl_fScores = clCreateBuffer(clContext, CL_MEM_READ_WRITE, size_fScores, NULL, &err);  
+    cl_mPSMs = clCreateBuffer(clContext, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, size_mPSMs , init_mPSMs, &err);
+    cl_fNextScores = clCreateBuffer(clContext, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, size_fNextScores, init_fNextScores, &err);
     //MEA: need to block free until previous clCreateBuffer commands complete?
     free(init_mPSMs);
     free(init_fNextScores);
     check_cl_error(__FILE__, __LINE__, err, "Unable to allocate device memory for candidates and results.");
+
+    //determine how many spectra can be kept in device memory at a time
+    size_t availMemSpectra = cl_info.lGlobalMemSize
+        - size_iPeakBins
+        - size_fPeakInts
+        - size_init_fSpectra
+        - size_cCandidates
+        - size_fScores
+        - size_mPSMs
+        - size_fNextScores;
+    long maxCachedSpectra = availMemSpectra / (tempest.iNumMS2Bins*sizeof(cl_float));
+    //maxCachedSpectra = 1;
+    if (maxCachedSpectra > tempest.iNumSpectra)
+        maxCachedSpectra = tempest.iNumSpectra;
+    
+    printf(" » Allocating %ld bytes of device memory for %ld cached spectra.\n", maxCachedSpectra*tempest.iNumMS2Bins*sizeof(cl_float), maxCachedSpectra);
+    for (int i=0; i<maxCachedSpectra; i++) {
+        cl_mem newBuffer = clCreateBuffer(clContext, CL_MEM_READ_WRITE, tempest.iNumMS2Bins*sizeof(cl_float), NULL, &err);
+        check_cl_error(__FILE__, __LINE__, err, "Unable to allocate spectrum memory on device.");
+        unusedBuffers.push(newBuffer);
+    }
 }
 
 /*

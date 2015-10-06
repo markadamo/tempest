@@ -93,7 +93,7 @@ extern void search_fasta_database()
 
     // progress
     if (args.iPrintLevel && !args.bPrintCandidates) {
-        printf(" * Digesting %d proteins...     ", tempest.iNumProteins);
+        printf(" » Digesting %d proteins...     ", tempest.iNumProteins);
     }
     
     // Get memory for the protein references
@@ -179,6 +179,7 @@ extern void search_fasta_database()
     // Score Remaining Candidates
     for(i=0;i<tempest.iNumPrecursorBins;i++) {
         for (e = eScanIndex[i]; e; e = e->next) {
+            //printf("%d\t%d\n", gpu_info.iNumScoringKernels, i);
             if (0 < e->iNumBufferedCandidates) gpu_score_candidates(e);
         }
     }
@@ -453,13 +454,24 @@ void store_candidate(cObj cCandidate) {
             tempest.lNumPSMs += 1;
             if (e->iNumBufferedCandidates == 0) {
                 clWaitForEvents(1, &(e->clEventSent));
+                if (PROFILE) {
+                    cl_ulong start;
+                    cl_ulong end;
+                    int err;
+                    err = clGetEventProfilingInfo(e->clEventSent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+                    err |= clGetEventProfilingInfo(e->clEventSent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
+                    if (err == 0)
+                        totalSendTime += (end-start);
+                }
                 clReleaseEvent(e->clEventSent);
             }
             e->pCandidateBufferFill[e->iNumBufferedCandidates] = cCandidate;
             e->iNumCandidates++;
             e->iNumBufferedCandidates++;
-            if (e->iNumBufferedCandidates == config.iCandidateBufferSize)
+            if (e->iNumBufferedCandidates == config.iCandidateBufferSize) {
+                //printf("%d\t%d\n", gpu_info.iNumScoringKernels, iBin);
                 gpu_score_candidates(e);
+            }
         }
     }
 }

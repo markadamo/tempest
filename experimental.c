@@ -59,7 +59,7 @@ extern void collect_msms_spectra()
 	r.readFile(args.sSpectra, s);
 
 	if (args.iPrintLevel) {
-		printf(" * Preparing %d MS/MS spectra...     ", tempest.iNumSpectra);
+		printf(" » Preparing %d MS/MS spectra...     ", tempest.iNumSpectra);
 	}
 
 	// Allocate host memory for peak data
@@ -256,8 +256,8 @@ int parse_scan(MSToolkit::Spectrum spectrum, double *dPrecursorMass, int* iPrecu
 	}
 
     //setup regioning
-	int iBinsPerRegion = (int) (*iMaxBin-*iMinBin) / (MSMS_NORM_REGIONS-1);
-	if (iBinsPerRegion == 0) iBinsPerRegion = 1;
+	float binsPerRegion = (float)(*iMaxBin-*iMinBin) / MSMS_NORM_REGIONS;
+	if (binsPerRegion == 0) binsPerRegion = 1;
 	
 	//setup noise removal (squared because we sqrt *after* thresholding)
 	float fIntensityCutoff = *fMaxIntensity * MSMS_NOISE_CUTOFF * MSMS_NOISE_CUTOFF;
@@ -270,7 +270,9 @@ int parse_scan(MSToolkit::Spectrum spectrum, double *dPrecursorMass, int* iPrecu
     for (std::map<int,float>::iterator it=bin2intensity.begin(); it!=bin2intensity.end(); ++it) {
         iBin = it->first;
         fIntensity = it->second;
-        int iRegion = (int) (iBin-*iMinBin) / iBinsPerRegion;
+        int iRegion = (int)((iBin-*iMinBin)/MSMS_NORM_REGIONS / binsPerRegion * MSMS_NORM_REGIONS);
+        if (iRegion == MSMS_NORM_REGIONS)
+            iRegion--;
         if (fIntensity > fRegionMaxes[iRegion])
 			fRegionMaxes[iRegion] = fIntensity;
     }
@@ -279,9 +281,11 @@ int parse_scan(MSToolkit::Spectrum spectrum, double *dPrecursorMass, int* iPrecu
     for (std::map<int,float>::iterator it=bin2intensity.begin(); it!=bin2intensity.end(); ++it) {
         iBin = it->first;
         fIntensity = it->second;
-        int iRegion = (int) (iBin-*iMinBin) / iBinsPerRegion;
         if (fIntensity < fIntensityCutoff)
             continue;
+        int iRegion = (int)((iBin-*iMinBin)/MSMS_NORM_REGIONS / binsPerRegion * MSMS_NORM_REGIONS);
+        if (iRegion == MSMS_NORM_REGIONS)
+            iRegion--;
         host_iPeakBins.push_back(iBin);
         host_fPeakInts.push_back(sqrt(fIntensity / fRegionMaxes[iRegion]) * (float)PRIMARY_INTENSITY);
         parsedPeaks++;

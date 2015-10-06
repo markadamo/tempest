@@ -31,6 +31,7 @@ int main(int argc, char **argv)
         printf("Total send time:         %fs\n", (float)totalSendTime/1000000000);
         printf("Total score time:        %fs\n", (float)totalScoreTime/1000000000);
         printf("Total reduce time:       %fs\n", (float)totalReduceTime/1000000000);
+        printf("Build launches:          %ld\n", buildLaunches);
         printf("Scoring kernel launches: %ld\n", scoreKernelLaunches);
     }
     

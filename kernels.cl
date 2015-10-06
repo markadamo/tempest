@@ -119,7 +119,7 @@ __kernel void gpu_build(__global float* fSpectrum, long lSpectrumOffset, int iPe
  *      fSpectrum       Memory for transformed spectrum.
  */
 
-__kernel void gpu_transform(__global float* fScratch, long lScratchOffset, __global float* fSpectrum, long lSpectrumOffset)
+__kernel void gpu_transform_scratch(__global float* fScratch, long lScratchOffset, __global float* fSpectrum, long lSpectrumOffset)
 {
 
     int iStart = get_global_id(0);
@@ -142,14 +142,38 @@ __kernel void gpu_transform(__global float* fScratch, long lScratchOffset, __glo
     //fIntensity += fScratch[iStart+GPU_XWIDTH+1];
 }
 
+__kernel void gpu_transform(__global float* fSpectrum, long lSpectrumOffset)
+{
+
+    int iStart = get_global_id(0);
+    if (iStart >= GPU_NUM_BINS) return;
+
+    fSpectrum += lSpectrumOffset;
+
+    float fIntensity = 0.0f;
+
+    // Calculate the initial fIntensity for each thread
+    int windowStart = max(iStart-GPU_XWIDTH, 0);
+    int windowEnd = min(iStart+GPU_XWIDTH, GPU_NUM_BINS-1);
+    for (int iBin = windowStart; iBin <= windowEnd; iBin++) {
+        fIntensity += fSpectrum[iBin];
+    }
+    
+    fSpectrum[iStart] -= (fIntensity)/(GPU_XWIDTH*2+1);
+        
+    //update the intensity
+    //fIntensity -= fScratch[iStart-GPU_XWIDTH];
+    //fIntensity += fScratch[iStart+GPU_XWIDTH+1];
+}
+
 __kernel void gpu_transform_local(__global float* fSpectrum, long lSpectrumOffset)
 {
 
     int iStart = get_group_id(0);
-    int localIndex = iStart + (get_local_id(0) - GPU_XWIDTH/2);
-    if (localIndex >= 0)
-        localIndex += 1;
     if (iStart >= GPU_NUM_BINS) return;
+    int localIndex = iStart + (get_local_id(0) - GPU_XWIDTH/2);
+    if (localIndex >= iStart)
+        localIndex += 1;
 
     fSpectrum += lSpectrumOffset;
 

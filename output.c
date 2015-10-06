@@ -42,7 +42,7 @@ extern void write_psms()
         fprintf(stderr, "\nERROR\tUnable to allocate host memory for results\n");
         tempest_exit(EXIT_FAILURE);
     }
-    
+
     // transfer results
     err = clEnqueueReadBuffer(clCommandQueue, cl_mPSMs, CL_TRUE, 0, sizeof(mObj)*tempest.iNumSpectra*params.iNumOutputPSMs, mPSMs, 0, NULL, NULL);
     //cudaMemcpy(mPSMs, gpu_mPSMs, sizeof(mObj)*tempest.iNumSpectra*params.iNumOutputPSMs, cudaMemcpyDeviceToHost);
@@ -57,7 +57,7 @@ extern void write_psms()
         strcat(sOutfile, ".csv\0");
 
         if (args.iPrintLevel) {
-            printf(" * Writing results to %s... ", sOutfile);
+            printf(" » Writing results to %s... ", sOutfile);
         }
 
         // open

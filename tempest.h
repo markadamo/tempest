@@ -25,6 +25,7 @@
 #include <float.h>
 #include <time.h>
 #include <vector>
+#include <stack>
 #include <map>
 
 typedef off_t f_off; //MSToolkit 
@@ -273,6 +274,8 @@ struct GPUINFO {
 
 struct CLINFO {
     cl_uint  iMaxComputeUnits;
+    cl_uint  iAddressBits;
+    cl_bool  bUnifiedMemory;
     cl_ulong lMaxWorkGroupSize;
     cl_ulong lGlobalMemSize;
     cl_ulong lMaxMemAllocSize;
@@ -362,6 +365,8 @@ extern long  *host_lPeakIndices;
 extern std::vector<int>   host_iPeakBins;
 extern std::vector<float> host_fPeakInts;
 extern cObj  *host_cCandidates;
+extern std::stack<cl_mem> unusedBuffers;
+extern std::map<long, cl_mem> spectrum2buffer;
 
 extern cl_mem cl_iPeakCounts;
 extern cl_mem cl_lPeakIndices;
@@ -392,6 +397,7 @@ extern long totalBuildTime;
 extern long totalMemsetTime;
 extern long totalSendTime;
 extern long totalTransformTime;
+extern long buildLaunches;
 extern long scoreKernelLaunches;
 
 //==================================================================================================
