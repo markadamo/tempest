@@ -1,12 +1,4 @@
-/*
- *  theoretical.c
- *
- *  Created by Brendan Faherty on 12/8/08.
- *  Copyright 2008 Dartmouth College. All rights reserved.
- *
- */
-
-#include "tempest.h"
+#include "tempest.hpp"
 
 #define LENGTH_INPUT_BUFFER 1024
 
@@ -180,7 +172,7 @@ extern void search_fasta_database()
     for(i=0;i<tempest.iNumPrecursorBins;i++) {
         for (e = eScanIndex[i]; e; e = e->next) {
             //printf("%d\t%d\n", gpu_info.iNumScoringKernels, i);
-            if (0 < e->iNumBufferedCandidates) gpu_score_candidates(e);
+            if (0 < e->iNumBufferedCandidates) e->device->scoreCandidates(e);
         }
     }
     
@@ -202,7 +194,7 @@ extern void search_fasta_database()
 
 void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
 {
-    static int i, iStart, iEnd, iPeptideLength, iEndLength, iNextNterm, iAA, iBin, iPattern;
+    static int iStart, iEnd, iPeptideLength, iEndLength, iNextNterm, iAA, iBin, iPattern;
     static int iNumAAModTargets, iModMass, iObjMass, iNumMods;
     static double dPeptideMass;
     static double dBaseMass;
@@ -222,11 +214,11 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
         bDigestSites = (bool*) calloc(26, sizeof(bool));
         bDigestNoSites = (bool*) calloc(26, sizeof(bool));
         
-        for (i=0; i<strlen(params.sDigestSites); i++) {
+        for (unsigned int i=0; i<strlen(params.sDigestSites); i++) {
             bDigestSites[aa2i(params.sDigestSites[i])] = 1;
         }
 
-        for (i=0; i<strlen(params.sDigestNoSites); i++) {
+        for (unsigned int i=0; i<strlen(params.sDigestNoSites); i++) {
             bDigestNoSites[aa2i(params.sDigestNoSites[i])] = 1;
         }
     }
@@ -454,6 +446,7 @@ void store_candidate(cObj cCandidate) {
             tempest.lNumPSMs += 1;
             if (e->iNumBufferedCandidates == 0) {
                 clWaitForEvents(1, &(e->clEventSent));
+                /*
                 if (PROFILE) {
                     cl_ulong start;
                     cl_ulong end;
@@ -463,6 +456,7 @@ void store_candidate(cObj cCandidate) {
                     if (err == 0)
                         totalSendTime += (end-start);
                 }
+                */
                 clReleaseEvent(e->clEventSent);
             }
             e->pCandidateBufferFill[e->iNumBufferedCandidates] = cCandidate;
@@ -470,7 +464,7 @@ void store_candidate(cObj cCandidate) {
             e->iNumBufferedCandidates++;
             if (e->iNumBufferedCandidates == config.iCandidateBufferSize) {
                 //printf("%d\t%d\n", gpu_info.iNumScoringKernels, iBin);
-                gpu_score_candidates(e);
+                e->device->scoreCandidates(e);
             }
         }
     }

@@ -1,5 +1,4 @@
-
-#include "tempest.h"
+#include "tempest.hpp"
 
 #ifdef MAC
 #include <OpenCL/cl.h>
@@ -18,7 +17,7 @@
  * Checks for OpenCL errors. Prints message and error string and exits on error.
  */
 
-extern void check_cl_error(char* file, int line, int err, char* sMessage) {
+extern void check_cl_error(const char* file, int line, int err, const char* sMessage) {
     if (err < 0) {
         fprintf(stderr, "\n");
         fprintf(stderr, "OpenCL Error: %s@%d\t%s\n", file, line, sMessage);
@@ -94,7 +93,7 @@ extern void print_device_info() {
     check_cl_error(__FILE__, __LINE__, err, "Unable to enumerate OpenCL platforms");
 
     //printf("=== %d OpenCL platform(s) found: ===\n", platforms_n);   
-    for (int i=0; i<platforms_n; i++)
+    for (unsigned int i=0; i<platforms_n; i++)
         {
             char buffer[10240];
             printf("  ╔═\e[1mPlatform %d\e[22m\n", i);
@@ -114,7 +113,7 @@ extern void print_device_info() {
             check_cl_error(__FILE__, __LINE__, err, "Unable to enumerate OpenCL devices");
 
             //printf("      === %d OpenCL device(s) found on platform %d: ===\n", i);
-            for (int j=0; j<devices_n; j++)
+            for (unsigned int j=0; j<devices_n; j++)
                 {
                     char buffer[10240];
                     cl_uint buf_uint;
@@ -318,27 +317,6 @@ extern char* modnpeptide(const char* sPeptide, int iLen, unsigned int uiModPatte
     sModPeptide[j] = '\0';
 
     return sModPeptide;
-}
-
-extern const char* get_setup_mode(enum SETUP_MODE e) {
-    switch (e) {
-    case NO_PREBUILD:  return "No Prebuild (copy only)";
-    case SEQ_PREBUILD: return "Sequential Prebuild";
-    case PAR_PREBUILD: return "Parallel Prebuild";
-    }
-    return "Unknown";
-}
-
-extern const char* get_score_mode(enum SCORE_MODE e) {
-    switch (e) {
-    case SCORE:                    return "Prebuilt Score";
-    case BUILD_SCORE:              return "Build, Score";
-    case BUILD_TRANS_SCORE:        return "Build, Transform, Score";
-    case SCORE_SHARED:             return "Prebuilt Score - Shared";
-    case BUILD_SCORE_SHARED:       return "Build+Score - Shared";
-    case BUILD_TRANS_SCORE_SHARED: return "Build+Transform+Score - Shared";
-    }
-    return "Unknown";
 }
 
 extern unsigned long hash(char *s) {

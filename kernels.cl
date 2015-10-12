@@ -62,7 +62,7 @@ typedef struct mobject {
 //Mass delta and score weighting for a neutral loss event
 typedef struct nlValue {
     int   numSites;
-    char  aaString[64];
+    bool  hasAA['z'-'A'+1];
     float massDelta;
     float weighting;
 } nlValue;
@@ -283,12 +283,9 @@ __kernel void gpu_score(int iPrecursorCharge, int iNumCandidates, __global cObj*
             //initialize aa counts to y fragment
             for(iFragment=0; iFragment<cCandidate->iPeptideLength; iFragment++) {
                 char aa = cCandidate->sPeptide[iFragment];
-                for (int j=0; j<nlValuesAA[i].numSites; j++) {
-                    if (nlValuesAA[i].aaString[j] == aa) {
-                        yNLCount[i] += 1;
-                        yNLTotal += 1;
-                        break;
-                    }
+                if (nlValuesAA[i].hasAA[aa2i(aa)]) {
+                    yNLCount[i] += 1;
+                    yNLTotal += 1;
                 }
             }
         }
@@ -307,14 +304,11 @@ __kernel void gpu_score(int iPrecursorCharge, int iNumCandidates, __global cObj*
         if (NUM_AA_NL && yNLTotal) {
             char aa = cCandidate->sPeptide[iFragment];
             for (int i=0; i<NUM_AA_NL; i++) {
-                for (int j=0; j<nlValuesAA[i].numSites; j++) {
-                    if (nlValuesAA[i].aaString[j] == aa) {
-                        bNLCount[i] += 1;
-                        yNLCount[i] -= 1;
-                        bNLTotal += 1;
-                        yNLTotal -= 1;
-                        break;
-                    }
+                if (nlValuesAA[i].hasAA[aa2i(aa)]) {
+                    bNLCount[i] += 1;
+                    yNLCount[i] -= 1;
+                    bNLTotal += 1;
+                    yNLTotal -= 1;
                 }
             }
         }
@@ -339,7 +333,7 @@ __kernel void gpu_score(int iPrecursorCharge, int iNumCandidates, __global cObj*
 
             if (NUM_AA_NL) {
                 // NLs from B ion
-	      if (bNLTotal){// && bMatchedInt > 0) {
+                if (bNLTotal){// && bMatchedInt > 0) {
                     for (int i=0; i<NUM_AA_NL; i++) {
                         if (bNLCount[i]) {
                             iBin = (int) ((fBMass + GPU_MASS_PROTON[iCharge] - nlValuesAA[i].massDelta) / iCharge / GPU_TOLERANCE + 0.5f);
@@ -348,7 +342,7 @@ __kernel void gpu_score(int iPrecursorCharge, int iNumCandidates, __global cObj*
                         }
                     }
                 }
-	      if (yNLTotal){// && yMatchedInt > 0) {
+                if (yNLTotal){// && yMatchedInt > 0) {
                     for (int i=0; i<NUM_AA_NL; i++) {
                         if (yNLCount[i]) {
                             iBin = (int) ((fYMassBase - fBMass + GPU_MASS_PROTON[iCharge] - nlValuesAA[i].massDelta) / iCharge / GPU_TOLERANCE + 0.5);
@@ -375,6 +369,8 @@ __kernel void gpu_score(int iPrecursorCharge, int iNumCandidates, __global cObj*
             }
         }
     }                                 
+
+    //printf("%f\n", fScoreNL); 
     
     gpu_fScores[iThread] = (fScoreP + fScoreNL)*PRIMARY_INTENSITY/10000.0f;
     

@@ -1,5 +1,4 @@
-
-#include "tempest.h"
+#include "tempest.hpp"
 
 void usage();
 void version();
@@ -110,11 +109,7 @@ void usage()
     printf("    --no-match             Process MS/MS and digest fasta, but do not assign candidates.\n");
     printf("    --no-score             Process MS/MS and assign candidates, but do not produce similarity scores.\n");
     printf("\nGPU CONFIGURATION\n");
-    printf("    --force-no-gpu         Do not use CUDA-enabled GPUs, even if available.\n");
-    printf("    --force-shared         Use shared GPU memory, even if ...\n");
-    printf("    --force-no-prebuild    Do not prebuild MS/MS spectra, even if space allows.\n");
-    printf("    --buffer-size <N>      Num candidates to collect before scoring (default %d).\n", DEFAULT_CANDIDATE_BUFFER_SIZE);
-    printf("    --block-dim <N>        Num kernel blocks when scoring candidates (default %d).\n", DEFAULT_BLOCKDIM_SCORE);
+    printf("    --buffer-size <N>      Num candidates to collect before scoring (default %lu).\n", DEFAULT_CANDIDATE_BUFFER_SIZE);
     printf("\n");
 }
 
@@ -139,10 +134,10 @@ void set_short_argument(char arg, char *value)
     case 'O': args.sOut = strdup_s(value);      break;
     case 'P': args.sParams = strdup_s(value);   break;
     case 'D':
-        token = strtok(value, ",.;:|-/_");
+        token = strtok(value, ",.:|-/_");
         config.iPlatform = atoi(token);
-        token = strtok(NULL, ",.;:|-/_");
-        config.iDevice = atoi(token);
+        while (token = strtok(NULL, ",.:|-/_"))
+            config.iDevices.push_back(atoi(token));
         break;
     case 'S':
         token = strtok(value, ",.;:|-/_");
@@ -189,41 +184,12 @@ void set_long_argument(char* arg, char* value)
         args.bNoScore = 1;
     }
 
-    else if (strcasecmp(arg, "force-no-gpu") == 0) {
-        config.bForceNoGPU = 1;
-    }
-
-    else if (strcasecmp(arg, "force-shared") == 0) {
-        config.bForceShared = 1;
-    }
-
-    else if (strcasecmp(arg, "force-no-prebuild") == 0) {
-        config.bForceNoPrebuild = 1;
-    }
-
     else if (strcasecmp(arg, "buffer-size") == 0) {
         if (value) {
             config.iCandidateBufferSize = atoi(value);
         }
         else {
             fprintf(stderr, "\nERROR\tArgument --buffer-size requires a value\n");
-            usage();
-            tempest_exit(EXIT_FAILURE);
-        }
-    }
-
-    else if (strcasecmp(arg, "block-dim") == 0) {
-        if (value) {
-            config.iScoreBlockDim = atoi(value);
-        }
-        else {
-            fprintf(stderr, "\nERROR\tArgument --block-dim requires a value\n");
-            usage();
-            tempest_exit(EXIT_FAILURE);
-        }
-
-        if (config.iScoreBlockDim > MAX_BLOCKDIM) {
-            fprintf(stderr, "\nERROR\tInvalid block dimension: %d (max block dimension is %d)\n", config.iScoreBlockDim, MAX_BLOCKDIM);
             usage();
             tempest_exit(EXIT_FAILURE);
         }

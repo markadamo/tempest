@@ -1,5 +1,4 @@
-
-#include "tempest.h"
+#include "tempest.hpp"
 
 #ifdef MAC
 #include <OpenCL/cl.h>
@@ -44,9 +43,9 @@ extern void write_psms()
     }
 
     // transfer results
-    err = clEnqueueReadBuffer(clCommandQueue, cl_mPSMs, CL_TRUE, 0, sizeof(mObj)*tempest.iNumSpectra*params.iNumOutputPSMs, mPSMs, 0, NULL, NULL);
+    err = Tempest::devices[0]->get_mPSMs(mPSMs);
     //cudaMemcpy(mPSMs, gpu_mPSMs, sizeof(mObj)*tempest.iNumSpectra*params.iNumOutputPSMs, cudaMemcpyDeviceToHost);
-    err |= clEnqueueReadBuffer(clCommandQueue, cl_fNextScores, CL_TRUE, 0, sizeof(float)*tempest.iNumSpectra, fNextScores, 0, NULL, NULL);
+    err |= Tempest::devices[0]->get_fNextScores(fNextScores);
     //cudaMemcpy(fNextScores, gpu_fNextScores, sizeof(float)*tempest.iNumSpectra, cudaMemcpyDeviceToHost);
     check_cl_error(__FILE__, __LINE__, err, "Unable to transfer results from the device");
     
@@ -229,26 +228,15 @@ extern void write_log()
     }
 
     fprintf(log, "Similarity Score:    %s\n", params.bCrossCorrelation ? "xcorr" : "dotproduct");
-    fprintf(log, "Duplicate Peak Mode: %s\n", params.bTrackDuplicates ? "max" : "sum");
     fprintf(log, "Flanking Peaks:      %d\n", params.bTheoreticalFlanking);
-    //fprintf(log, "Neutral Loss Peaks:  %d\n", params.bTheoreticalNL);
-    //fprintf(log, "Phos NL Peaks:       %d\n", params.bTheoreticalPhosNL);
     fprintf(log, "Max Output PSMs:     %d\n", params.iNumOutputPSMs);
     fprintf(log, "Fix Delta Score:     %d\n", params.bFixDeltaScore);
     fprintf(log, "\n");
 
-    //config
-    if (config.bForceNoGPU) {
-        fprintf(log, "CPU-only mode\n");
-    }
-
-    else {
-        fprintf(log, "GPU Device: %d\n", config.iDevice);
-        fprintf(log, "Setup Mode: %s\n", get_setup_mode(config.eSetup));
-        fprintf(log, "Score Mode: %s\n", get_score_mode(config.eScore));
-        fprintf(log, " Buffer:    %d\n", config.iCandidateBufferSize);
-        fprintf(log, " Config:    %d blocks x %d threads per block\n", config.iScoreNumBlocks, config.iScoreBlockDim);
-    }
+    
+    fprintf(log, " Buffer:    %lu\n", config.iCandidateBufferSize);
+    fprintf(log, " Config:    %lu blocks x %lu threads per block\n", config.iScoreNumBlocks, config.iScoreBlockDim);
+        
     fprintf(log, "\n");
 
     //summary

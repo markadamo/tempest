@@ -1,4 +1,4 @@
-#include "tempest.h"
+#include "tempest.hpp"
 
 #ifdef MAC
 #include <OpenCL/cl.h>
@@ -16,7 +16,6 @@ struct PARAMS params;
 struct CONFIG config;
 struct INFO tempest;
 struct GPUINFO gpu_info;
-struct CLINFO cl_info;
 
 // MS/MS scans
 eObj **eScanIndex;
@@ -36,7 +35,7 @@ float fMassCO[MAX_CHARGE];
 char  cModSites[('Z' - 'A')+1];
 float fModValues[('Z' - 'A')+1];
 
-// neutral losses
+// neutral losses 
 //for sorting neutral_loss parameter lines
 std::vector<nlValue> nlValuesNterm;
 std::vector<nlValue> nlValuesCterm;
@@ -49,12 +48,12 @@ cObj  *host_cCandidates;
 
 //config constants
 size_t MAX_BLOCKDIM = 32;
-size_t DEFAULT_CANDIDATE_BUFFER_SIZE = 4096;
+size_t DEFAULT_CANDIDATE_BUFFER_SIZE = 1024;
 size_t DEFAULT_BLOCKDIM_SCORE = 32;
 size_t BLOCKDIM_PREBUILD = 1;
 size_t BLOCKDIM_PREBUILD_TRANSFORMATION = 1;
 size_t BLOCKDIM_BUILD = 32;
-size_t BLOCKDIM_TRANSFORM = 1024;
+size_t BLOCKDIM_TRANSFORM = 32;
 size_t BLOCKDIM_REDUCE = 1024;
 size_t CL_ONE = 256;
 
@@ -109,17 +108,13 @@ extern void initialize_globals()
 	params.fRemoveMzRanges = 0;
 	params.iNumRemoveMzRanges = 0;
 	params.bCrossCorrelation = 0;
-	params.bTrackDuplicates = 1;
 	params.bTheoreticalFlanking = 1;
 	params.iNumOutputPSMs = 1;
 	params.bFixDeltaScore = 0;
 
 	//config
     config.iPlatform = 0;
-	config.iDevice = 0;
-	config.bForceNoGPU = 0;
-	config.bForceShared = 0;
-	config.bForceNoPrebuild = 1;
+	config.iDevices = std::vector<unsigned int>();
 	config.iCandidateBufferSize = DEFAULT_CANDIDATE_BUFFER_SIZE;
 	config.iScoreBlockDim = DEFAULT_BLOCKDIM_SCORE;
     config.minScan = 0;
@@ -274,7 +269,6 @@ extern void setup_globals()
 	}
 
 	// MS/MS spectrum
-	// TODO dynamic iNumMS2Bins
 	tempest.iCrossCorrelationWidth = (int) CROSS_CORRELATION_WINDOW / params.fFragmentTolerance;
 
 	// config
@@ -291,16 +285,16 @@ extern void cleanup_globals()
 	eObj *e, *eNext;
 
 	// args
-	safe_free(args.sSpectra);
-	safe_free(args.sFasta);
-	safe_free(args.sParams);
-	safe_free(args.sOut);
+	//safe_free(args.sSpectra);
+	//safe_free(args.sFasta);
+	//safe_free(args.sParams);
+	//safe_free(args.sOut);
 
 	// params
-	safe_free(params.tMods);
+	//safe_free(params.tMods);
 	params.iNumMods=0;
 
-	safe_free(params.fRemoveMzRanges);
+	//safe_free(params.fRemoveMzRanges);
 	params.iNumRemoveMzRanges=0;
 
 	// scans

@@ -1,15 +1,8 @@
-/*
- *  tempest.c
- *
- *  Created by Brendan Faherty on 12/8/08.
- *  Copyright 2008 Dartmouth College. All rights reserved.
- *
- */
-
-#include "tempest.h"
+#include "tempest.hpp"
 
 std::vector<int>   host_iPeakBins;
 std::vector<float> host_fPeakInts;
+std::vector<eObj*> eScans;
 
 int parse_scan(MSToolkit::Spectrum, double*, int*, int*, int*, float*);
 void setup_spectrum(int, int, double, int);
@@ -331,11 +324,11 @@ void setup_spectrum(int iSpectrumIndex, int iScanNum, double dPrecursorMass, int
 
 	e->pCandidateBufferFill = &host_cCandidates[config.iCandidateBufferSize * e->lIndex];
 
-    e->clEventSent = clCreateUserEvent(clContext, NULL);
-    clSetUserEventStatus(e->clEventSent, 0);
-
 	e->next = 0;
 
+    // store in 1D vector of scans
+    eScans.push_back(e);
+    
 	// get mass index
 	iMassIndex = (int) floor((float) e->dPrecursorMass / tempest.fPrecursorBinWidth);
 		

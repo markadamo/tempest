@@ -1,4 +1,4 @@
-#include "tempest.h"
+#include "tempest.hpp"
 
 #ifdef MAC
 #include <OpenCL/cl.h>
@@ -226,14 +226,14 @@ extern void parse_params() {
                 nlValuesCterm.push_back(nlv);
             }
             else {
-                char aaString[64];
+                bool hasAA['z'-'A'+1] = {0};
                 int numSites = 0;
                 for (c=sLocation; *c; c++) {
                     if (!isalnum(*c)) {
                         bool matchedMod;
                         for (int i=0; i<params.iNumMods; i++) {
                             if (params.tMods[i].cSymbol == *c) {
-                                aaString[numSites] = tolower(params.tMods[i].cAminoAcid);
+                                hasAA[aa2i(tolower(params.tMods[i].cAminoAcid))] = 1;
                                 numSites += 1;
                                 matchedMod = true;
                             }
@@ -242,7 +242,7 @@ extern void parse_params() {
                             printf("\nWARNING: Neutral loss modification symbol (%c) is not used in any specified variable mods.\n", *c);
                     }
                     else if (isalpha(*c) && isupper(*c)) {
-                        aaString[numSites] = *c;
+                        hasAA[aa2i(*c)] = 1;
                         numSites += 1;
                     }                  
                     else {
@@ -256,7 +256,7 @@ extern void parse_params() {
                     nlv.numSites = numSites;
                     nlv.massDelta = dMassDiff;
                     nlv.weighting = dWeighting;
-                    strncpy(nlv.aaString, aaString, (size_t)numSites);
+                    memcpy(nlv.hasAA, hasAA, ('z'-'A'+1)*sizeof(bool));
                     nlValuesAA.push_back(nlv);
                 }
             }
