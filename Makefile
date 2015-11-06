@@ -1,10 +1,10 @@
 CC=g++
-override CFLAGS=-w -g -O3 #-fsanitize=address
-SOURCES=$(wildcard *.c)
+override CFLAGS=-g -O3 #-fsanitize=address
+SOURCES=$(wildcard *.cpp)
 #OBJECTS=$(SOURCES:.c=.o)
 MSTOOLKIT=MSToolkit
-INC_DIRS=MSToolkit/include
-LIB_DIRS=$(MSTOOLKIT)
+INC_DIRS=MSToolkit/include #clheaders
+LIB_DIRS=$(MSTOOLKIT) #clheaders
 LIBS=-lmstoolkitlite #-lasan
 EXECUTABLE=tempest
 
@@ -38,14 +38,14 @@ endif
 ifdef AMDAPPSDKROOT
    INC_DIRS += $(AMDAPPSDKROOT)/include
 	ifeq ($(PROC_TYPE),)
-		LIB_DIRS=$(AMDAPPSDKROOT)/lib/x86
+		LIB_DIRS += $(AMDAPPSDKROOT)/lib/x86
 	else
-		LIB_DIRS=$(AMDAPPSDKROOT)/lib/x86_64
+		LIB_DIRS += $(AMDAPPSDKROOT)/lib/x86_64
 	endif
 else
 
 # Check for Linux-Nvidia
-ifdef CUDA
+ifdef CUDA	
 	INC_DIRS += $(CUDA)/include
 else
 	INC_DIRS += /usr/local/cuda/include

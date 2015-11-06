@@ -17,7 +17,7 @@
  * Checks for OpenCL errors. Prints message and error string and exits on error.
  */
 
-extern void check_cl_error(const char* file, int line, int err, const char* sMessage) {
+extern void Tempest::check_cl_error(const char* file, int line, int err, const char* sMessage) {
     if (err < 0) {
         fprintf(stderr, "\n");
         fprintf(stderr, "OpenCL Error: %s@%d\t%s\n", file, line, sMessage);
@@ -26,7 +26,7 @@ extern void check_cl_error(const char* file, int line, int err, const char* sMes
     }
 }
 
-const char * get_error_string(cl_int err){
+const char * Tempest::get_error_string(cl_int err){
     switch(err){
     case   0: return "CL_SUCCESS";
     case  -1: return "CL_DEVICE_NOT_FOUND";
@@ -84,7 +84,7 @@ const char * get_error_string(cl_int err){
  * Print information about OpenCL platforms/devices available on the system.
  */
 
-extern void print_device_info() {
+extern void Tempest::print_device_info() {
     cl_platform_id platforms[100];
     cl_uint platforms_n = 0;
     int err;
@@ -154,7 +154,7 @@ extern void print_device_info() {
  *  Duplicate a string - wraps malloc and strcpy with error checking.
  */
 
-extern char* strdup_s(char* s) {
+extern char* Tempest::strdup_s(char* s) {
     int n = strlen(s);
     char* d = (char*) malloc(n + PADDING);
     if (0 == s) {
@@ -170,7 +170,7 @@ extern char* strdup_s(char* s) {
  * Calculates combinations (binomial coefficient)
  */
 
-extern int n_choose_k(int n, int k)
+extern int Tempest::n_choose_k(int n, int k)
 {
     int i, c;
     
@@ -189,7 +189,7 @@ extern int n_choose_k(int n, int k)
  * roundf - based on http://forums.belution.com/en/cpp/000/050/13.shtml 
  */
 
-extern float roundf(float value)
+extern float Tempest::roundf(float value)
 {
     if (value < 0) return (float) -(floor(-value + 0.5));
     else return  (float) floor(value + 0.5);
@@ -201,7 +201,7 @@ extern float roundf(float value)
  * Round up to nearest multiple (useful for global/local work dimensions)
  */
 
-extern long mround(long num, int multiple) {
+extern long Tempest::mround(long num, int multiple) {
     return num < multiple ? multiple : ((num + multiple - 1) / multiple) * multiple;
 }
 
@@ -209,7 +209,7 @@ extern long mround(long num, int multiple) {
  * convert to string binary
  */
     
-extern const char *byte_to_binary(unsigned int x)
+extern const char* Tempest::byte_to_binary(unsigned int x)
 {
     static char b[17];
     unsigned int z;
@@ -232,94 +232,13 @@ extern const char *byte_to_binary(unsigned int x)
   return ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
   }*/
 
-extern int count_set_bits(unsigned int v) {
+extern int Tempest::count_set_bits(unsigned int v) {
     unsigned int c;
     for (c=0; v; c++) v &= v-1;
     return c;
 }
 
-/*
- *
- */
-
-extern char* modpeptide(const char* sPeptide, unsigned int uiModPattern) {
-    static int i;
-    static char *c;
-    static unsigned int uiMod;
-    static char *sModPeptide=0;
-
-    if (sModPeptide == 0) sModPeptide = (char*) malloc((MAX_PEPTIDE_LENGTH + params.iModificationsMax) * sizeof(char));
-
-    uiMod = 1;
-    
-    // advance uiMod bit for variable nterm
-    if (params.cVariableNtermSymbol) uiMod <<= 1;
-
-    for (c=sModPeptide, i=0; *c; c++) {
-        // aa
-        sModPeptide[i++] = *c;
-        
-        // aa symbol
-        if (cModSites[aa2i(*c)]) {
-            if (uiMod & uiModPattern) sModPeptide[i++] = cModSites[aa2i(*c)];
-            uiMod <<= 1;
-        }
-
-        // nterm symbol
-        if (c==sModPeptide && params.cVariableNtermSymbol && (uiModPattern & (unsigned int) 1)) {
-            sModPeptide[i++] = params.cVariableNtermSymbol;
-        }
-    }
-
-    // cterm symbol
-    if (params.cVariableCtermSymbol && (uiMod & uiModPattern)) {
-        sModPeptide[i++] = params.cVariableCtermSymbol;
-    }
-
-    sModPeptide[i] = '\0';
-
-    return sModPeptide;
-}
-
-extern char* modnpeptide(const char* sPeptide, int iLen, unsigned int uiModPattern) {
-    static int i, j;
-    static unsigned int uiMod;
-    static char *sModPeptide=0;
-
-    if (sModPeptide == 0) sModPeptide = (char*) malloc((MAX_PEPTIDE_LENGTH + params.iModificationsMax + 1) * sizeof(char));
-
-    uiMod=1;
-
-    // advance uiMod bit for variable nterm
-    if (params.cVariableNtermSymbol) uiMod <<= 1;
-
-    for (i=0, j=0; i<iLen; i++) {
-        // aa
-        sModPeptide[j++] = sPeptide[i];
-        
-        // aa symbol
-        if (cModSites[aa2i(sPeptide[i])]) {
-            if (uiMod & uiModPattern) sModPeptide[j++] = cModSites[aa2i(sPeptide[i])];
-            uiMod <<= 1;
-        }
-
-        // nterm symbol
-        if (i==0 && params.cVariableNtermSymbol && (uiModPattern & (unsigned int) 1)) {
-            sModPeptide[j++] = params.cVariableNtermSymbol;
-        }
-    }
-    
-    // cterm symbol
-    if (params.cVariableCtermSymbol && (uiMod & uiModPattern)) {
-        sModPeptide[j++] = params.cVariableCtermSymbol;
-    }
-
-    sModPeptide[j] = '\0';
-
-    return sModPeptide;
-}
-
-extern unsigned long hash(char *s) {
+extern unsigned long Tempest::hash(char *s) {
     unsigned long hash = 5381;
     int c;
 
@@ -330,7 +249,7 @@ extern unsigned long hash(char *s) {
     return hash;
 }
 
-extern unsigned long hashn(char *s, int n) {
+extern unsigned long Tempest::hashn(char *s, int n) {
     unsigned long hash = 5381;
     int i;
 
@@ -340,3 +259,24 @@ extern unsigned long hashn(char *s, int n) {
 
     return hash;
 }
+
+extern unsigned char Tempest::toMod(char c, int modInd) {
+    return c + 32*modInd;
+}
+
+extern int Tempest::getModInd(unsigned char c) {
+    return ((int)c - 32) / 'Z';
+}
+
+extern bool Tempest::backboneMatch(mObj m1, mObj m2) {
+    if (m1.iPeptideLength != m2.iPeptideLength)
+        return 0;
+    int i=0;
+    unsigned char* s1 = m1.sPeptide;
+    unsigned char* s2 = m2.sPeptide;
+    while (i<m1.iPeptideLength && (((s1[i]%32) == (s2[i]%32))))
+        i++;
+    return (s1[i]%32) == (s2[i]%32);
+}
+    
+    

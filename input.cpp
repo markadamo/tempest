@@ -9,7 +9,7 @@ void set_long_argument(char*, char*);
  * Parse command line input.
  */
 
-extern void parse_input(int argc, char **argv)
+extern void Tempest::parse_input(int argc, char **argv)
 {
     int i;
     char short_argument;
@@ -39,50 +39,59 @@ extern void parse_input(int argc, char **argv)
 
         else {
             fprintf(stderr, "\nERROR\tCould not parse argument [%s]\n", argv[i]);
-            tempest_exit(EXIT_FAILURE);
+            Tempest::tempest_exit(EXIT_FAILURE);
         }
     }
     
     // MzXML
-    if (0 == args.sSpectra) {
+    if (0 == Tempest::args.sSpectra) {
         fprintf(stderr, "\nERROR\tNo spectra file given.\n");
         usage();
-        tempest_exit(EXIT_FAILURE);
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
     
-    if ((fp = (FILE *) fopen(args.sSpectra, "r")) == NULL) {
-        fprintf(stderr, "\nERROR\tUnable to open spectra file %s: %s\n", args.sSpectra, strerror(errno));
-        tempest_exit(EXIT_FAILURE);
+    if ((fp = (FILE *) fopen(Tempest::args.sSpectra, "r")) == NULL) {
+        fprintf(stderr, "\nERROR\tUnable to open spectra file %s: %s\n", Tempest::args.sSpectra, strerror(errno));
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
     fclose(fp);
     
     // Fasta database
-    if (0 == args.sFasta) {
+    if (0 == Tempest::args.sFasta) {
         fprintf(stderr, "\nERROR\tNo fasta database given.\n");
         usage();
-        tempest_exit(EXIT_FAILURE);
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
     
-    if (0 == (fp = (FILE *) fopen(args.sFasta, "r"))) {
-        fprintf(stderr, "\nERROR\tUnable to open fasta database %s: %s\n", args.sFasta, strerror(errno));
-        tempest_exit(EXIT_FAILURE);
+    if (0 == (fp = (FILE *) fopen(Tempest::args.sFasta, "r"))) {
+        fprintf(stderr, "\nERROR\tUnable to open fasta database %s: %s\n", Tempest::args.sFasta, strerror(errno));
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
     fclose(fp);
     
     // Params
-    if (0 == args.sParams) {
-        args.sParams = strdup_s(DEFAULT_PARAMS_FILE);
+    if (0 == Tempest::args.sParams) {
+        Tempest::args.sParams = DEFAULT_PARAMS_FILE;
     }
-    
-    if (0 == (fp = (FILE *) fopen(args.sParams, "r"))) {
-        fprintf(stderr, "\nERROR\tUnable to open params file %s: %s\n", args.sParams, strerror(errno));
-        tempest_exit(EXIT_FAILURE);
+    if (0 == (fp = (FILE *) fopen(Tempest::args.sParams, "r"))) {
+        fprintf(stderr, "\nERROR\tUnable to open params file %s: %s\n", Tempest::args.sParams, strerror(errno));
+        Tempest::tempest_exit(EXIT_FAILURE);
+    }
+    fclose(fp);
+
+    // Params
+    if (0 == Tempest::args.sConfig) {
+        Tempest::args.sConfig = DEFAULT_CONFIG_FILE;
+    }
+    if (0 == (fp = (FILE *) fopen(Tempest::args.sConfig, "r"))) {
+        fprintf(stderr, "\nERROR\tUnable to open config file %s: %s\n", Tempest::args.sConfig, strerror(errno));
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
     fclose(fp);
 
     // Out file
-    if (!(args.sOut || sscanf(args.sSpectra, "%s.mzXML", args.sOut) == 1 || sscanf(args.sSpectra, "%s.mzxml", args.sOut) == 1)) {
-        strcpy(args.sOut, args.sSpectra);
+    if (!(Tempest::args.sOut || sscanf(Tempest::args.sSpectra, "%s.mzXML", Tempest::args.sOut) == 1 || sscanf(Tempest::args.sSpectra, "%s.mzxml", Tempest::args.sOut) == 1)) {
+        strcpy(Tempest::args.sOut, Tempest::args.sSpectra);
     }
 }
 
@@ -92,24 +101,22 @@ extern void parse_input(int argc, char **argv)
 
 void usage()
 {
-    printf("\nUSAGE tempest <-m mzXML> <-f FASTA database>\n");
-    printf("\nARGUMENTS\n");
-    printf("    -i <PATH>              spectra file (mzXML)\n");
+    printf("\nUSAGE tempest [options] -i <spectra_file> -f <FASTA_file>\n");
+    printf("\nOPTIONS\n");
+    printf("    -i <PATH>              spectra file\n");
     printf("    -f <PATH>              fasta database\n");
     printf("    -p <PATH>              params file (default: tempest.params)\n");
-    printf("    -o <PATH>              output file (default: <mzxml path>.csv)\n");
-    printf("    -d <N>                 OpenCL platform:device to use (default: 0:0)\n");
+    printf("    -c <PATH>              config file (default: tempest.config)\n");
+    printf("    -o <PATH>              output file (default: <spectra path>.csv)\n");
+    printf("    -d <N:N>               OpenCL platform:device to use (override config)\n");
+    printf("    -s <N:N>               Scan range (min:max MS2 scan IDs)\n");
     printf("    -l <N>                 print level (verbosity)\n");
     printf("    -h                     help\n");
     printf("    -v                     version\n");
     printf("\nMISC\n");
+    printf("    --device-info          Print OpenCL device map.\n");
     printf("    --split-output         Write results for each observed spectrum to a separate output file.\n");
     printf("    --print-candidates     Print digested candidate peptides to stdout.\n");
-    printf("    --no-digest            Process MS/MS, but do not digest fasta database.\n");
-    printf("    --no-match             Process MS/MS and digest fasta, but do not assign candidates.\n");
-    printf("    --no-score             Process MS/MS and assign candidates, but do not produce similarity scores.\n");
-    printf("\nGPU CONFIGURATION\n");
-    printf("    --buffer-size <N>      Num candidates to collect before scoring (default %lu).\n", DEFAULT_CANDIDATE_BUFFER_SIZE);
     printf("\n");
 }
 
@@ -129,75 +136,66 @@ void set_short_argument(char arg, char *value)
 {
     char* token;
     switch(toupper(arg)) {
-    case 'I': args.sSpectra = strdup_s(value);  break;
-    case 'F': args.sFasta = strdup_s(value);    break;
-    case 'O': args.sOut = strdup_s(value);      break;
-    case 'P': args.sParams = strdup_s(value);   break;
+    case 'I': Tempest::args.sSpectra = Tempest::strdup_s(value);  break;
+    case 'F': Tempest::args.sFasta = Tempest::strdup_s(value);    break;
+    case 'O': Tempest::args.sOut = Tempest::strdup_s(value);      break;
+    case 'P': Tempest::args.sParams = Tempest::strdup_s(value);   break;
+    case 'C': Tempest::args.sConfig = Tempest::strdup_s(value);   break;
     case 'D':
         token = strtok(value, ",.:|-/_");
-        config.iPlatform = atoi(token);
+        Tempest::config.iPlatform = atoi(token);
         while (token = strtok(NULL, ",.:|-/_"))
-            config.iDevices.push_back(atoi(token));
+            Tempest::config.iDevices.push_back(atoi(token));
+        Tempest::args.deviceOverride = 1;
         break;
     case 'S':
         token = strtok(value, ",.;:|-/_");
-        config.minScan = atoi(token);
+        Tempest::config.minScan = atoi(token);
         token = strtok(NULL, ",.;:|-/_");
-        config.maxScan = atoi(token);
+        Tempest::config.maxScan = atoi(token);
         break;
-    case 'L': args.iPrintLevel = atoi(value);   break;
+    case 'L': Tempest::args.iPrintLevel = atoi(value);   break;
     case 'V': version();
-        tempest_exit(EXIT_SUCCESS);     break;
+        Tempest::tempest_exit(EXIT_SUCCESS);     break;
     case 'H': usage();
-        tempest_exit(EXIT_SUCCESS);     break;
+        Tempest::tempest_exit(EXIT_SUCCESS);     break;
     default:
         fprintf(stderr, "\nERROR\tUnknown argument (%c)\n", arg);
         usage();
-        tempest_exit(EXIT_FAILURE);
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
 }
 
 void set_long_argument(char* arg, char* value)
 {
     if (strcasecmp(arg, "device-info") == 0) {
-        print_device_info();
-        tempest_exit(EXIT_SUCCESS);
+        Tempest::print_device_info();
+        Tempest::tempest_exit(EXIT_SUCCESS);
     }
     
     if (strcasecmp(arg, "split-output") == 0) {
-        args.bSplitOutput = 1;
+        Tempest::args.bSplitOutput = 1;
     }
 
     else if (strcasecmp(arg, "print-candidates") == 0) {
-        args.bPrintCandidates = 1;
+        Tempest::args.bPrintCandidates = 1;
     }
 
     else if (strcasecmp(arg, "no-digest") == 0) {
-        args.bNoDigest = 1;
+        Tempest::args.bNoDigest = 1;
     }
 
     else if (strcasecmp(arg, "no-match") == 0) {
-        args.bNoMatch = 1;
+        Tempest::args.bNoMatch = 1;
     }
 
     else if (strcasecmp(arg, "no-score") == 0) {
-        args.bNoScore = 1;
-    }
-
-    else if (strcasecmp(arg, "buffer-size") == 0) {
-        if (value) {
-            config.iCandidateBufferSize = atoi(value);
-        }
-        else {
-            fprintf(stderr, "\nERROR\tArgument --buffer-size requires a value\n");
-            usage();
-            tempest_exit(EXIT_FAILURE);
-        }
+        Tempest::args.bNoScore = 1;
     }
 
     else {
         fprintf(stderr, "\nERROR\tUnknown argument (%s)\n", arg);
         usage();
-        tempest_exit(EXIT_FAILURE);
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
 }

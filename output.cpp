@@ -6,7 +6,7 @@
 #include <CL/cl.h>
 #endif
 
-#define header "scan,precursor mass,charge,candidates,rank,sequence,ref,occurrences,sequence_mass,ppm,xcorr,dcn\n"
+#define header "scan,precursor mass,charge,candidates,rank,sequence,ref,occurrences,sequence_mass,ppm,xcorr,dcn,dcn_backbone\n"
 
 char* standard_peptide(mObj);
 
@@ -14,7 +14,7 @@ char* standard_peptide(mObj);
  * Write PSMs to the output file(s)
  */
 
-extern void write_psms()
+extern void Tempest::write_psms()
 {
     char    sOutfile[STRING_SIZE];
     eObj    *e;
@@ -31,38 +31,40 @@ extern void write_psms()
     fp = 0;
     
     // allocate host memory
-    if (0 == (mPSMs = (mObj*) malloc(sizeof(mObj)*tempest.iNumSpectra*params.iNumOutputPSMs))) {
+    if (0 == (mPSMs = (mObj*) malloc(sizeof(mObj)*Tempest::tempest.iNumSpectra*Tempest::params.numInternalPSMs))) {
         fprintf(stderr, "\nERROR\tUnable to allocate host memory for results\n");
-        tempest_exit(EXIT_FAILURE);
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
 
     // allocate host memory
-    if (0 == (fNextScores = (float*) malloc(sizeof(float)*tempest.iNumSpectra))) {
+    if (0 == (fNextScores = (float*) malloc(sizeof(float)*Tempest::tempest.iNumSpectra))) {
         fprintf(stderr, "\nERROR\tUnable to allocate host memory for results\n");
-        tempest_exit(EXIT_FAILURE);
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
 
     // transfer results
-    err = Tempest::devices[0]->get_mPSMs(mPSMs);
-    //cudaMemcpy(mPSMs, gpu_mPSMs, sizeof(mObj)*tempest.iNumSpectra*params.iNumOutputPSMs, cudaMemcpyDeviceToHost);
-    err |= Tempest::devices[0]->get_fNextScores(fNextScores);
-    //cudaMemcpy(fNextScores, gpu_fNextScores, sizeof(float)*tempest.iNumSpectra, cudaMemcpyDeviceToHost);
-    check_cl_error(__FILE__, __LINE__, err, "Unable to transfer results from the device");
+    err = 0;
+    for (int i=0; i<Tempest::config.iDevices.size(); i++)
+        err |= Tempest::devices[i]->get_mPSMs(mPSMs);
+    //cudaMemcpy(mPSMs, gpu_mPSMs, sizeof(mObj)*Tempest::tempest.iNumSpectra*Tempest::params.iNumOutputPSMs, cudaMemcpyDeviceToHost);
+    //err |= Tempest::devices[0]->get_fNextScores(fNextScores);
+    //cudaMemcpy(fNextScores, gpu_fNextScores, sizeof(float)*Tempest::tempest.iNumSpectra, cudaMemcpyDeviceToHost);
+    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to transfer results from the device");
     
     // setup single output file
-    if (!args.bSplitOutput) {
+    if (!Tempest::args.bSplitOutput) {
         //filename
-        strcpy(sOutfile, args.sOut);
+        strcpy(sOutfile, Tempest::args.sOut);
         strcat(sOutfile, ".csv\0");
 
-        if (args.iPrintLevel) {
+        if (Tempest::args.iPrintLevel) {
             printf(" » Writing results to %s... ", sOutfile);
         }
 
         // open
         if (0 == (fp = (FILE *) fopen(sOutfile, "w"))) {
             fprintf(stderr, "\nERROR\tUnable to open %s (%s)\n", sOutfile, strerror(errno));
-            tempest_exit(EXIT_FAILURE);
+            Tempest::tempest_exit(EXIT_FAILURE);
         }
 
         // header
@@ -70,8 +72,8 @@ extern void write_psms()
     }
 
     // loop through MS/MS scans
-    for (iBin=0;iBin<tempest.iNumPrecursorBins;iBin++) {
-        for (e = eScanIndex[iBin]; e; e = e->next) {
+    for (iBin=0;iBin<Tempest::tempest.iNumPrecursorBins;iBin++) {
+        for (e = Tempest::eScanIndex[iBin]; e; e = e->next) {
             // skip if no results
             if (0 == e->iNumCandidates) {
                 fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
@@ -79,10 +81,10 @@ extern void write_psms()
             }
 
             // open split output file
-            if (args.bSplitOutput) {
+            if (Tempest::args.bSplitOutput) {
                 //filename
                 if (!(sscanf(e->sName, "%s.dta", sOutfile) == 1)) {
-                    strcpy(sOutfile, args.sOut);
+                    strcpy(sOutfile, Tempest::args.sOut);
                     strcat(sOutfile, ".");
                     strcat(sOutfile, e->sName);
                 }
@@ -92,8 +94,8 @@ extern void write_psms()
 
                 //open
                 if (0 == (fp = (FILE *) fopen(sOutfile, "w"))) {
-                    fprintf(stderr, "\nERROR\tUnable to open %s (%s)\n", args.sOut, strerror(errno));
-                    tempest_exit(EXIT_FAILURE);
+                    fprintf(stderr, "\nERROR\tUnable to open %s (%s)\n", Tempest::args.sOut, strerror(errno));
+                    Tempest::tempest_exit(EXIT_FAILURE);
                 }
 
                 //header
@@ -102,45 +104,60 @@ extern void write_psms()
             }
             
             // write matches to file
-            mScanPSMs = &mPSMs[e->lIndex*params.iNumOutputPSMs];
-            iRank=1;
+            mScanPSMs = &(mPSMs[e->lIndex*Tempest::params.numInternalPSMs]);
+            iRank=0;
             fPrevScore = FLT_MAX;
-            for (i=0; i < params.iNumOutputPSMs; i++) {
-                if (mScanPSMs[i].fScore == 0.0f) {
-                    fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
-                    continue;
+            for (i=0; i < Tempest::params.numOutputPSMs; i++) {
+                if (mScanPSMs[i].fScore <= 0.0f) {
+                    if (i==0)
+                        fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
+                    break;
                 }
 
+                // update rank
+                //if(mScanPSMs[i].fScore != fPrevScore) {
+                //    iRank += 1;
+                //    fPrevScore = mScanPSMs[i].fScore;
+                // }
+                
                 fprintf(fp, "%s,", e->sName);
                 fprintf(fp, "%.5f,", e->dPrecursorMass);
                 fprintf(fp, "%d,", e->iPrecursorCharge);
                 fprintf(fp, "%d,", e->iNumCandidates);
-                fprintf(fp, "%d,", iRank);
+                fprintf(fp, "%d,", i+1);
                 fprintf(fp, "%c.%s.%c,", mScanPSMs[i].cBefore, standard_peptide(mScanPSMs[i]), mScanPSMs[i].cAfter);
-                fprintf(fp, "%s,", &sProteinReferences[mScanPSMs[i].iProtein * MAX_LENGTH_REFERENCE]);
+                fprintf(fp, "%s,", &Tempest::sProteinReferences[mScanPSMs[i].iProtein * MAX_LENGTH_REFERENCE]);
                 fprintf(fp, "%d,", mScanPSMs[i].iNumOccurrences);
                 fprintf(fp, "%.5f,", mScanPSMs[i].fPeptideMass);
                 fprintf(fp, "%.4f,", 1000000.0f * (e->dPrecursorMass - mScanPSMs[i].fPeptideMass) / mScanPSMs[i].fPeptideMass);
                 fprintf(fp, "%.4f,", mScanPSMs[i].fScore);
-                if (i==0) fprintf(fp, "%.4f", (mScanPSMs[0].fScore - fNextScores[e->lIndex]) / mScanPSMs[0].fScore);
-                else fprintf(fp, "n/a");
-                fprintf(fp, "\n");
-
-                // update rank
-                if(mScanPSMs[i].fScore != fPrevScore) {
-                    iRank += 1;
-                    fPrevScore = mScanPSMs[i].fScore;
+                if (i < Tempest::params.numInternalPSMs-1)
+                    fprintf(fp, "%.4f,", (mScanPSMs[i].fScore - mScanPSMs[i+1].fScore) / mScanPSMs[i].fScore);
+                else
+                    fprintf(fp, "%.4f,", 1.0);
+                if (i < Tempest::params.numInternalPSMs-1) {
+                    float nextScore_backbone = 0;
+                    for (int j=i+1; j<Tempest::params.numInternalPSMs; j++) {
+                        if (!Tempest::backboneMatch(mScanPSMs[i], mScanPSMs[j])) {
+                            nextScore_backbone = mScanPSMs[j].fScore;
+                            break;
+                        }
+                    }
+                    fprintf(fp, "%.4f", (mScanPSMs[i].fScore - nextScore_backbone) / mScanPSMs[i].fScore);
                 }
+                else
+                    fprintf(fp, "%.4f", 1.0);
+                fprintf(fp, "\n");
             }
 
             // close split output file
-            if (args.bSplitOutput) fclose(fp);
+            if (Tempest::args.bSplitOutput) fclose(fp);
         }
     }
     
     // close single output file
-    if (!args.bSplitOutput) {
-        if (args.iPrintLevel) printf("done\n");
+    if (!Tempest::args.bSplitOutput) {
+        if (Tempest::args.iPrintLevel) printf("done\n");
         if (fp) fclose(fp);
     }
     
@@ -149,7 +166,7 @@ extern void write_psms()
     //free(fNextScores);
 }
 
-extern void write_log()
+extern void Tempest::write_log()
 {
     int i;
     char sOutfile[STRING_SIZE];
@@ -159,13 +176,13 @@ extern void write_log()
     struct tm *tDate;
 
     //filename
-    strcpy(sOutfile, args.sOut);
+    strcpy(sOutfile, Tempest::args.sOut);
     strcat(sOutfile, ".log\0");
     
     // open log file
     if (0 == (log = (FILE *) fopen(sOutfile, "w"))) {
         fprintf(stderr, "\nERROR\tUnable to open %s for writing (%s)\n", sOutfile, strerror(errno));
-        tempest_exit(EXIT_FAILURE);
+        Tempest::tempest_exit(EXIT_FAILURE);
     }
 
     //Tempest info
@@ -181,96 +198,97 @@ extern void write_log()
     fprintf(log, "Date: %s\n", sDate);
 
     //params
-    fprintf(log, "Spectra:             %s\n", args.sSpectra);
-    fprintf(log, "Fasta:               %s\n", args.sFasta);
-    fprintf(log, "Digest Sites:        %s\n", params.sDigestSites);
-    fprintf(log, "Non-Digest Sites:    %s\n", params.sDigestNoSites);
-    fprintf(log, "Digest Offset:       %d\n", params.iDigestOffset);
-    switch (params.iDigestSpecificity) {
+    fprintf(log, "Spectra:             %s\n", Tempest::args.sSpectra);
+    fprintf(log, "Fasta:               %s\n", Tempest::args.sFasta);
+    fprintf(log, "Digest Sites:        %s\n", Tempest::params.sDigestSites);
+    fprintf(log, "Non-Digest Sites:    %s\n", Tempest::params.sDigestNoSites);
+    fprintf(log, "Digest Offset:       %d\n", Tempest::params.iDigestOffset);
+    switch (Tempest::params.iDigestSpecificity) {
     case 0: fprintf(log, "Digest Specificity:  None\n"); break;
     case 1: fprintf(log, "Digest Specificity:  Partial\n"); break;
     case 2: fprintf(log, "Digest Specificity:  Full\n"); break;
     }
-    fprintf(log, "Missed Cleavages:    %d\n", params.iDigestMaxMissedCleavages);
-    fprintf(log, "Digest Length:       %d-%d\n", params.iMinPeptideLength, params.iMaxPeptideLength);
+    fprintf(log, "Missed Cleavages:    %d\n", Tempest::params.iDigestMaxMissedCleavages);
+    fprintf(log, "Digest Length:       %d-%d\n", Tempest::params.iMinPeptideLength, Tempest::params.iMaxPeptideLength);
 
-    for (i=0; i<params.iNumMods; i++) {
-        if (!params.tMods[i].cSymbol) {
-            fprintf(log, "Fixed Modification:  %c %.4f Da\n", params.tMods[i].cAminoAcid, params.tMods[i].dMassDiff);
+    for (i=0; i<Tempest::params.iNumMods; i++) {
+        if (!Tempest::params.tMods[i].cSymbol) {
+            fprintf(log, "Fixed Modification:  %c %.4f Da\n", Tempest::params.tMods[i].cAminoAcid, Tempest::params.tMods[i].dMassDiff);
         }
     }
 
-    if (params.dPeptideNtermMass > 0.0) fprintf(log, "Fixed Modification:  peptide-nterm %f Da\n", params.dPeptideNtermMass);
-    if (params.dPeptideCtermMass > 0.0) fprintf(log, "Fixed Modification:  peptide-cterm %f Da\n", params.dPeptideCtermMass);
-    if (params.dProteinNtermMass > 0.0) fprintf(log, "Fixed Modification:  protein-nterm %f Da\n", params.dProteinNtermMass);
-    if (params.dProteinCtermMass > 0.0) fprintf(log, "Fixed Modification:  protein-cterm %f Da\n", params.dProteinCtermMass);
+    if (Tempest::params.dPeptideNtermMass > 0.0) fprintf(log, "Fixed Modification:  peptide-nterm %f Da\n", Tempest::params.dPeptideNtermMass);
+    if (Tempest::params.dPeptideCtermMass > 0.0) fprintf(log, "Fixed Modification:  peptide-cterm %f Da\n", Tempest::params.dPeptideCtermMass);
+    if (Tempest::params.dProteinNtermMass > 0.0) fprintf(log, "Fixed Modification:  protein-nterm %f Da\n", Tempest::params.dProteinNtermMass);
+    if (Tempest::params.dProteinCtermMass > 0.0) fprintf(log, "Fixed Modification:  protein-cterm %f Da\n", Tempest::params.dProteinCtermMass);
 
-    for (i=0; i<params.iNumMods; i++) {
-        if (params.tMods[i].cSymbol) {
-            fprintf(log, "Modification:        %c%c %.4f Da\n", params.tMods[i].cAminoAcid, params.tMods[i].cSymbol, params.tMods[i].dMassDiff);
+    for (i=0; i<Tempest::params.iNumMods; i++) {
+        if (Tempest::params.tMods[i].cSymbol) {
+            fprintf(log, "Modification:        %c%c %.4f Da\n", Tempest::params.tMods[i].cAminoAcid, Tempest::params.tMods[i].cSymbol, Tempest::params.tMods[i].dMassDiff);
         }
     }
 
-    if (params.cVariableNtermSymbol) {
-        fprintf(log, "Modification:        nterm %c %.4f Da\n", params.cVariableNtermSymbol, params.dVariableNtermMassDiff);
+    for (i=0; i<Tempest::numNtermModSites; i++) {
+        fprintf(log, "Modification:        nterm %c %.4f Da\n", Tempest::ntermModSymbols[i], Tempest::ntermModMasses[i]);
     }
 
-    if (params.cVariableCtermSymbol) {
-        fprintf(log, "Modification:        cterm %c %.4f Da\n", params.cVariableCtermSymbol, params.dVariableCtermMassDiff);
+    for (i=0; i<Tempest::numCtermModSites; i++) {
+        fprintf(log, "Modification:        cterm %c %.4f Da\n", Tempest::ctermModSymbols[i], Tempest::ctermModMasses[i]);
     }
 
-    fprintf(log, "Precursor Tolerance: %.4f %s\n", params.fPrecursorTolerance, params.bPrecursorTolerancePPM ? "ppm" : "Da");
-    fprintf(log, "Fragment Tolerance:  %.4f %s\n", params.fFragmentTolerance, params.bFragmentTolerancePPM ? "ppm" : "mz");
-    fprintf(log, "Remove Precursors:   %d\n", params.bRemovePrecursors);
+    fprintf(log, "Precursor Tolerance: %.4f %s\n", Tempest::params.fPrecursorTolerance, Tempest::params.bPrecursorTolerancePPM ? "ppm" : "Da");
+    fprintf(log, "Fragment Tolerance:  %.4f %s\n", Tempest::params.fFragmentTolerance, Tempest::params.bFragmentTolerancePPM ? "ppm" : "mz");
+    fprintf(log, "Remove Precursors:   %d\n", Tempest::params.bRemovePrecursors);
 
-    for (i=0; i<params.iNumRemoveMzRanges; i++) {
-        fprintf(log, "Remove Peaks Range:  %.4f-%.4f m/z\n", params.fRemoveMzRanges[2*i], params.fRemoveMzRanges[2*i+1]);
+    for (i=0; i<Tempest::params.iNumRemoveMzRanges; i++) {
+        fprintf(log, "Remove Peaks Range:  %.4f-%.4f m/z\n", Tempest::params.fRemoveMzRanges[2*i], Tempest::params.fRemoveMzRanges[2*i+1]);
     }
 
-    fprintf(log, "Similarity Score:    %s\n", params.bCrossCorrelation ? "xcorr" : "dotproduct");
-    fprintf(log, "Flanking Peaks:      %d\n", params.bTheoreticalFlanking);
-    fprintf(log, "Max Output PSMs:     %d\n", params.iNumOutputPSMs);
-    fprintf(log, "Fix Delta Score:     %d\n", params.bFixDeltaScore);
+    fprintf(log, "xcorr_transform_window: %d\n", Tempest::params.xcorrTransformWidth);
+    fprintf(log, "flanking_intensity:     %f\n", Tempest::params.flankingIntensity);
+    fprintf(log, "num_internal_psms:      %d\n", Tempest::params.numInternalPSMs);
+    fprintf(log, "num_output_psms:        %d\n", Tempest::params.numOutputPSMs);
+    fprintf(log, "backbone_delta_score:   %d\n", Tempest::params.bFixDeltaScore);
     fprintf(log, "\n");
 
     
-    fprintf(log, " Buffer:    %lu\n", config.iCandidateBufferSize);
-    fprintf(log, " Config:    %lu blocks x %lu threads per block\n", config.iScoreNumBlocks, config.iScoreBlockDim);
+    //fprintf(log, " Buffer:    %lu\n", Tempest::config.iCandidateBufferSize);
+    //fprintf(log, " Config:    %lu blocks x %lu threads per block\n", Tempest::config.iScoreNumBlocks, Tempest::config.iScoreBlockDim);
         
     fprintf(log, "\n");
 
     //summary
-    fprintf(log, "Spectra:  %d\n", tempest.iNumSpectra);
-    fprintf(log, "Masses:   %.5f - %.5f Da\n", tempest.fMinPrecursorMass, tempest.fMaxPrecursorMass);
-    fprintf(log, "Proteins: %d\n", tempest.iNumProteins);
-    fprintf(log, "Peptides: %ld\n", tempest.lNumPeptides);
-    fprintf(log, "PSMs:     %ld\n", tempest.lNumPSMs);
-    fprintf(log, "Runtime:  %lus\n", (unsigned long int) tTime-tempest.tStart);
+    fprintf(log, "Spectra:  %d\n", Tempest::tempest.iNumSpectra);
+    fprintf(log, "Masses:   %.5f - %.5f Da\n", Tempest::tempest.fMinPrecursorMass, Tempest::tempest.fMaxPrecursorMass);
+    fprintf(log, "Proteins: %d\n", Tempest::tempest.iNumProteins);
+    fprintf(log, "Peptides: %ld\n", Tempest::tempest.lNumPeptides);
+    fprintf(log, "PSMs:     %ld\n", Tempest::tempest.lNumPSMs);
+    fprintf(log, "Runtime:  %lus\n", (unsigned long int) tTime-Tempest::tempest.tStart);
     
 }
 
 char* standard_peptide(mObj psm) {
     static int i;
-    static char* c;
+    static unsigned char* c;
     static char *sModPeptide=0;
     
-    if (sModPeptide == 0) sModPeptide = (char*) malloc((MAX_PEPTIDE_LENGTH + params.iModificationsMax + 1) * sizeof(char)); 
+    if (sModPeptide == 0) sModPeptide = (char*) malloc((MAX_PEPTIDE_LENGTH + Tempest::params.iModificationsMax + 1) * sizeof(char)); 
     for (c=psm.sPeptide, i=0; *c; c++) {
         if (isupper(*c)) {
             sModPeptide[i++] = *c;
         }
         else {
-            sModPeptide[i++] = toupper(*c);
-            sModPeptide[i++] = cModSites[aa2i(toupper(*c))];
+            sModPeptide[i++] = Tempest::unModAA[*c];
+            sModPeptide[i++] = Tempest::cModSites[Tempest::unModAA[*c]][Tempest::getModInd(*c)];
         }
 
-        if (c==psm.sPeptide && psm.bNtermMod) {
-            sModPeptide[i++] = params.cVariableNtermSymbol;
+        if (c==psm.sPeptide && psm.ntermMod) {
+            sModPeptide[i++] = Tempest::ntermModSymbols[psm.ntermMod-1];
         }
     }
 
-    if (psm.bCtermMod) {
-        sModPeptide[i++] = params.cVariableCtermSymbol;
+    if (psm.ctermMod) {
+        sModPeptide[i++] = Tempest::ctermModSymbols[psm.ctermMod-1];
     }
 
     sModPeptide[i] = '\0';
