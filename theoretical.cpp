@@ -27,8 +27,6 @@ extern void Tempest::search_fasta_database()
     eObj *e;
     float fProgress;
 
-    if (Tempest::args.bNoDigest) return;
-
     // Setup
 
     // allocate working memory
@@ -44,13 +42,13 @@ extern void Tempest::search_fasta_database()
             fMaxAAModMass = Tempest::params.tMods[i].dMassDiff;
     }
     float fMaxNtermModMass = 0.0f;
-    for (i=0; i<Tempest::numNtermModSites; i++)
-        if (ntermModMasses[i] > fMaxNtermModMass)
-            fMaxNtermModMass = ntermModMasses[i];
+    for (i=0; i<Tempest::params.numNtermModSites; i++)
+        if (Tempest::params.ntermModMasses[i] > fMaxNtermModMass)
+            fMaxNtermModMass = Tempest::params.ntermModMasses[i];
     float fMaxCtermModMass = 0.0f;
-    for (i=0; i<Tempest::numCtermModSites; i++)
-        if (Tempest::ctermModMasses[i] > fMaxCtermModMass)
-            fMaxCtermModMass = Tempest::ctermModMasses[i];
+    for (i=0; i<Tempest::params.numCtermModSites; i++)
+        if (Tempest::params.ctermModMasses[i] > fMaxCtermModMass)
+            fMaxCtermModMass = Tempest::params.ctermModMasses[i];
 
     float maxMaxTermModMass = fMaxNtermModMass > fMaxCtermModMass ? fMaxNtermModMass : fMaxCtermModMass;
     float minMaxTermModMass = fMaxNtermModMass < fMaxCtermModMass ? fMaxNtermModMass : fMaxCtermModMass;
@@ -68,15 +66,15 @@ extern void Tempest::search_fasta_database()
     fMaxMassDiff += fMaxAAModMass * remainingMods;
 
     if (Tempest::params.bPrecursorTolerancePPM) {
-        Tempest::tempest.fMinPrecursorMass -= Tempest::tempest.fMinPrecursorMass*Tempest::params.fPrecursorTolerance/1000000.0f;
-        Tempest::tempest.fMaxPrecursorMass += Tempest::tempest.fMaxPrecursorMass*Tempest::params.fPrecursorTolerance/1000000.0f;
+        Tempest::data.fMinPrecursorMass -= Tempest::data.fMinPrecursorMass*Tempest::params.fPrecursorTolerance/1000000.0f;
+        Tempest::data.fMaxPrecursorMass += Tempest::data.fMaxPrecursorMass*Tempest::params.fPrecursorTolerance/1000000.0f;
     }
     else {
-        Tempest::tempest.fMinPrecursorMass -= Tempest::params.fPrecursorTolerance;
-        Tempest::tempest.fMaxPrecursorMass += Tempest::params.fPrecursorTolerance;
+        Tempest::data.fMinPrecursorMass -= Tempest::params.fPrecursorTolerance;
+        Tempest::data.fMaxPrecursorMass += Tempest::params.fPrecursorTolerance;
     }
-    Tempest::tempest.dMinPeptideMass = Tempest::tempest.fMinPrecursorMass - fMaxMassDiff;
-    Tempest::tempest.dMaxPeptideMass = Tempest::tempest.fMaxPrecursorMass;
+    Tempest::data.dMinPeptideMass = Tempest::data.fMinPrecursorMass - fMaxMassDiff;
+    Tempest::data.dMaxPeptideMass = Tempest::data.fMaxPrecursorMass;
     
     // open fasta file
     if (0 == (fp = (FILE *) fopen(Tempest::args.sFasta, "r"))) {
@@ -85,20 +83,20 @@ extern void Tempest::search_fasta_database()
     }
 
     // count proteins
-    Tempest::tempest.iNumProteins = count_references(fp);
+    Tempest::data.iNumProteins = count_references(fp);
     
-    if (Tempest::tempest.iNumProteins == 0) {
+    if (Tempest::data.iNumProteins == 0) {
         fprintf(stderr, "\nERROR\tNo proteins found in fasta database: %s\n", Tempest::args.sFasta);
         Tempest::tempest_exit(EXIT_FAILURE);
     }
 
     // progress
     if (Tempest::args.iPrintLevel && !Tempest::args.bPrintCandidates) {
-        printf(" » Digesting %d proteins...     ", Tempest::tempest.iNumProteins);
+        printf(" » Digesting %d proteins...     ", Tempest::data.iNumProteins);
     }
     
     // Get memory for the protein references
-    if (0 == (Tempest::sProteinReferences = (char *) malloc(Tempest::tempest.iNumProteins * MAX_LENGTH_REFERENCE * sizeof(char)))) {
+    if (0 == (Tempest::data.sProteinReferences = (char *) malloc(Tempest::data.iNumProteins * MAX_LENGTH_REFERENCE * sizeof(char)))) {
         fprintf(stderr, "\nERROR\tUnable to allocate memory for protein references.\n");
         Tempest::tempest_exit(EXIT_FAILURE);
     }
@@ -115,11 +113,11 @@ extern void Tempest::search_fasta_database()
             // check for previous protein
             if (iLengthProtein > 0) {
                 // process
-                strcpy(&Tempest::sProteinReferences[iProtein * MAX_LENGTH_REFERENCE * sizeof(char)], sProteinReference);
+                strcpy(&Tempest::data.sProteinReferences[iProtein * MAX_LENGTH_REFERENCE * sizeof(char)], sProteinReference);
                 digest_protein(iProtein++, iLengthProtein, sProteinSequence);
 
                 if (Tempest::args.iPrintLevel && !Tempest::args.bPrintCandidates) {
-                    fProgress = (100.0f * iProtein) / Tempest::tempest.iNumProteins;
+                    fProgress = (100.0f * iProtein) / Tempest::data.iNumProteins;
                     if (fProgress - floor(fProgress) < 0.01f) printf("\b\b\b\b%*d%%", 3, (int) fProgress);
                     fflush(0);
                 }
@@ -169,17 +167,17 @@ extern void Tempest::search_fasta_database()
     }
     
     // Final protein
-    strncpy(&Tempest::sProteinReferences[iProtein * MAX_LENGTH_REFERENCE],sProteinReference,MAX_LENGTH_REFERENCE);
+    strncpy(&Tempest::data.sProteinReferences[iProtein * MAX_LENGTH_REFERENCE],sProteinReference,MAX_LENGTH_REFERENCE);
     digest_protein(iProtein++, iLengthProtein, sProteinSequence);
     
     if (Tempest::args.iPrintLevel && !Tempest::args.bPrintCandidates) {
-        fProgress = (100.0f * iProtein) / Tempest::tempest.iNumProteins;
+        fProgress = (100.0f * iProtein) / Tempest::data.iNumProteins;
         printf("\b\b\b\b%*d%%", 3, (int) fProgress);
     }
         
     // Score Remaining Candidates
-    for(i=0;i<Tempest::tempest.iNumPrecursorBins;i++) {
-        for (e = Tempest::eScanIndex[i]; e; e = e->next) {
+    for(i=0;i<Tempest::data.iNumPrecursorBins;i++) {
+        for (e = Tempest::data.eScanIndex[i]; e; e = e->next) {
             //printf("%d\t%d\n", gpu_info.iNumScoringKernels, i);
             if (e->iNumBufferedCandidates > 0)
                 e->device->scoreCandidates(e);
@@ -234,34 +232,27 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
 
         for (iEnd=iStart; iEnd < iLengthProtein; iEnd++) {
             unsigned char aa = sProteinSequence[iEnd];
-            
-            iPeptideLength = iEnd - iStart + 1;
 
-            // APPLY DIGESTION RULES
-            // What is the optimal arrangement for these checks?
+            iPeptideLength = iEnd - iStart + 1;
 
             // too long?
             if (iPeptideLength >= Tempest::params.iMaxPeptideLength) {
-                // if (Tempest::args.iPrintLevel==4) printf(">>> TOO LONG %d %.*s (%d > %d)\n", iProtein, iEnd-iStart+1, sProteinSequence+iStart, iPeptideLength, Tempest::params.iMaxPeptideLength);
                 break;
             }
             
             // update mass
-            dPeptideMass += Tempest::dMassAA[aa];
+            dPeptideMass += Tempest::params.dMassAA[aa];
             if (iEnd == iEndLength) dPeptideMass += Tempest::params.dProteinCtermMass;
             
             // too large (no spectra to match it)?
-            if (dPeptideMass > Tempest::tempest.dMaxPeptideMass) {
-                // if (Tempest::args.iPrintLevel==4) printf(">>> TOO LARGE %d %.*s (%.4f > %.4f)\n", iProtein, iEnd-iStart+1, sProteinSequence+iStart, dPeptideMass, Tempest::tempest.dMaxPeptideMass);
+            if (dPeptideMass > Tempest::data.dMaxPeptideMass) {
                 break;
             }
             
             // mod target?
-            if (Tempest::numAAModSites[aa]) {
+            if (Tempest::params.numAAModSites[aa]) {
                 // too many mod targets?
                 if (iNumAAModTargets >= MAX_MOD_TARGETS_PER_PEPTIDE) {
-                    // if (Tempest::args.iPrintLevel==4)
-                    //     printf(">>> TOO MANY MOD TARGETS %d %.*s (%d > %d)\n", iProtein, iEnd-iStart+1, sProteinSequence+iStart, iNumAAModTargets, MAX_MOD_TARGETS_PER_PEPTIDE);
                     break;
                 }
                 modInds[iNumAAModTargets] = iEnd - iStart;
@@ -269,8 +260,13 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
             }
             
             // cleavage site?
-            if ((iEnd == iEndLength) || (Tempest::bDigestSites[aa] && !Tempest::bDigestNoSites[sProteinSequence[(iEnd+1)]])) {
-                
+            bool isCleavageSite = false;
+            if (Tempest::params.iDigestOffset == 0)
+                isCleavageSite = (iEnd == iEndLength) || (Tempest::params.bDigestSites[sProteinSequence[iEnd+1]] && !Tempest::params.bDigestNoSites[aa]);
+            else
+                isCleavageSite = (iEnd == iEndLength) || (Tempest::params.bDigestSites[aa] && !Tempest::params.bDigestNoSites[sProteinSequence[iEnd+1]]);
+               
+            if (isCleavageSite) {    
                 // set next iStart value
                 if (!iNextNterm) {
                     iNextNterm = iEnd + 1;
@@ -278,35 +274,27 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
 
                 // too many missed cleavages?
                 if (iDigestSites > Tempest::params.iDigestMaxMissedCleavages) {
-                    // if (Tempest::args.iPrintLevel==4) printf(">>> TOO MANY MISSED CLEAVAGES %d %.*s (%d > %d)\n", iProtein, iEnd-iStart+1, sProteinSequence+iStart, iDigestSites, Tempest::params.iDigestMaxMissedCleavages);
                     break;
                 }
 
                 iDigestSites++;
             }
             else if (Tempest::params.iDigestSpecificity == 2 || (Tempest::params.iDigestSpecificity == 1 && bNterm == 0)) {
-                // if (Tempest::args.iPrintLevel==4) printf(">>> NONSPECIFIC %d %.*s (%d)\n", iProtein, iEnd-iStart+1, sProteinSequence+iStart, Tempest::params.iDigestSpecificity);
                 continue;
             }
             
             // too short or too small?
             if (iPeptideLength < Tempest::params.iMinPeptideLength) {
-                // if (Tempest::args.iPrintLevel==4) printf(">>> TOO SHORT %d %.*s (%d < %d)\n", iProtein, iEnd-iStart+1, sProteinSequence+iStart, iPeptideLength, Tempest::params.iMinPeptideLength);
                 continue;
             }
 
             //too small?
-            if (dPeptideMass < Tempest::tempest.dMinPeptideMass) {
-                // if (Tempest::args.iPrintLevel==4) printf(">>> TOO SMALL %d %.*s (%.4f < %.4f)\n", iProtein, iEnd-iStart+1, sProteinSequence+iStart, dPeptideMass, Tempest::tempest.dMinPeptideMass);
+            if (dPeptideMass < Tempest::data.dMinPeptideMass) {
                 continue;
             }
             
             // Potential Peptide found
-            Tempest::tempest.lNumPeptides += 1;
-
-            // if (Tempest::args.bNoMatch) {
-            //     continue;
-            // }
+            Tempest::data.lNumPeptides += 1;
 
             cObj init_cCandidate;
             strncpy((char*)init_cCandidate.sPeptide, &sProteinSequence[iStart], (size_t)iPeptideLength);
@@ -319,7 +307,7 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
             init_cCandidate.cBefore        = (iStart == 0)        ? '-' : sProteinSequence[iStart-1];
             init_cCandidate.cAfter         = (iEnd == iEndLength) ? '-' : sProteinSequence[iEnd+1];
 
-            gen_candidates(init_cCandidate, Tempest::numNtermModSites>0, Tempest::numCtermModSites>0, modInds, iNumAAModTargets, 0);
+            gen_candidates(init_cCandidate, Tempest::params.numNtermModSites>0, Tempest::params.numCtermModSites>0, modInds, iNumAAModTargets, 0);
         }
 
         //find next n-terminal residue
@@ -329,9 +317,14 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
             if (iNextNterm > 0) {
                 iStart = iNextNterm;
             }
+            else if (Tempest::params.iDigestOffset == 0) {
+                for (iStart=iEnd+1;
+                     iStart < iLengthProtein && (!Tempest::params.bDigestSites[sProteinSequence[iStart]] || Tempest::params.bDigestNoSites[sProteinSequence[iStart-1]]);
+                     iStart++);
+            }
             else {
                 for (iStart=iEnd+1;
-                     iStart < iLengthProtein && (!Tempest::bDigestSites[sProteinSequence[(iStart-1)]] || Tempest::bDigestNoSites[sProteinSequence[iStart]]);
+                     iStart < iLengthProtein && (!Tempest::params.bDigestSites[sProteinSequence[(iStart-1)]] || Tempest::params.bDigestNoSites[sProteinSequence[iStart]]);
                      iStart++);
             }
         }
@@ -339,7 +332,7 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
         // Partial or Nonspecific: next residue
         else {
             iStart++;
-            bNterm = Tempest::bDigestSites[sProteinSequence[(iStart-1)]] && !Tempest::bDigestNoSites[sProteinSequence[iStart]];
+            bNterm = Tempest::params.bDigestSites[sProteinSequence[(iStart-1)]] && !Tempest::params.bDigestNoSites[sProteinSequence[iStart]];
         }
     }
 }
@@ -389,11 +382,11 @@ void gen_candidates(cObj cCandidate, bool ntermMod, bool ctermMod, int* modInds,
     else if (modIndsLeft > 0) {
         int modInd = *modInds;
         unsigned char aa = cCandidate.sPeptide[modInd];
-        for (int i=0; i<Tempest::numAAModSites[aa]; i++) {
+        for (int i=0; i<Tempest::params.numAAModSites[aa]; i++) {
             cObj new_cCandidate = cCandidate;
             //memcpy(&new_cCandidate, &cCandidate, sizeof(cObj));
             new_cCandidate.sPeptide[modInd] = Tempest::toMod(aa, i+1);
-            new_cCandidate.fPeptideMass += Tempest::fModValues[aa][i];
+            new_cCandidate.fPeptideMass += Tempest::params.fModValues[aa][i];
             //printf("%c[%d] = %f\n", aa, i, sPeptide[modInd], Tempest::fModValues[aa][i]);
             gen_candidates(new_cCandidate, ntermMod, ctermMod, modInds+1, modIndsLeft-1, modCount+1);
         }
@@ -401,20 +394,20 @@ void gen_candidates(cObj cCandidate, bool ntermMod, bool ctermMod, int* modInds,
     }
     else if (ntermMod) {
         cObj new_cCandidate;
-        for (int i=0; i<Tempest::numNtermModSites; i++) {
+        for (int i=0; i<Tempest::params.numNtermModSites; i++) {
             memcpy(&new_cCandidate, &cCandidate, sizeof(cObj));
             new_cCandidate.ntermMod = i+1;
-            new_cCandidate.fPeptideMass += Tempest::ntermModMasses[i];
+            new_cCandidate.fPeptideMass += Tempest::params.ntermModMasses[i];
             gen_candidates(new_cCandidate, 0, ctermMod, modInds, modIndsLeft, modCount+1);
         }
         gen_candidates(cCandidate, 0, ctermMod, modInds, modIndsLeft, modCount);
     }
     else if (ctermMod) {
         cObj new_cCandidate;
-        for (int i=0; i<Tempest::numCtermModSites; i++) {
+        for (int i=0; i<Tempest::params.numCtermModSites; i++) {
             memcpy(&new_cCandidate, &cCandidate, sizeof(cObj));
             new_cCandidate.ctermMod = i+1;
-            new_cCandidate.fPeptideMass += Tempest::ctermModMasses[i];  
+            new_cCandidate.fPeptideMass += Tempest::params.ctermModMasses[i];  
             gen_candidates(new_cCandidate, ntermMod, 0, modInds, modIndsLeft, modCount+1);
         }
         gen_candidates(cCandidate, ntermMod, 0, modInds, modIndsLeft, modCount);
@@ -425,11 +418,11 @@ void gen_candidates(cObj cCandidate, bool ntermMod, bool ctermMod, int* modInds,
 
 void store_candidate(cObj cCandidate) {
     float fModMass = cCandidate.fPeptideMass;
-    if (fModMass < Tempest::tempest.fMinPrecursorMass || fModMass > Tempest::tempest.fMaxPrecursorMass)
+    if (fModMass < Tempest::data.fMinPrecursorMass || fModMass > Tempest::data.fMaxPrecursorMass)
         return;
-    int iModMass = (int) roundf(fModMass / Tempest::tempest.fPrecursorBinWidth);
-    for (int iBin=iModMass-1; iBin<=iModMass+1 && iBin<=Tempest::tempest.iNumPrecursorBins; iBin++) {
-        for (eObj* e = Tempest::eScanIndex[iBin]; e != 0; e = e->next) {
+    int iModMass = (int) roundf(fModMass / Tempest::data.fPrecursorBinWidth);
+    for (int iBin=iModMass-1; iBin<=iModMass+1 && iBin<=Tempest::data.iNumPrecursorBins; iBin++) {
+        for (eObj* e = Tempest::data.eScanIndex[iBin]; e != 0; e = e->next) {
             // check mass error
             if (Tempest::params.bPrecursorTolerancePPM) {
                 if (1000000.0f*fabs(fModMass - (float) e->dPrecursorMass) / fModMass > Tempest::params.fPrecursorTolerance)
@@ -440,7 +433,7 @@ void store_candidate(cObj cCandidate) {
                     continue;
             }
                   
-            Tempest::tempest.lNumPSMs += 1;
+            Tempest::data.lNumPSMs += 1;
             if (e->iNumBufferedCandidates == 0) {
                 clWaitForEvents(1, &(e->clEventSent));
                 /*

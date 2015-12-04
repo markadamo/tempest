@@ -36,8 +36,6 @@ typedef off_t f_off; //MSToolkit
 //  Settings and Defaults
 //==================================================================================================
 
-#define PROFILE 0
-
 #define STRING_SIZE 4096
 #define CASE_SHIFT 32
 
@@ -60,6 +58,8 @@ typedef off_t f_off; //MSToolkit
 
 #define INT_MAX 2147483647;
 
+#define MIN_SCORE -1000.0f
+
 //==================================================================================================
 // Macros
 //==================================================================================================
@@ -71,146 +71,6 @@ typedef off_t f_off; //MSToolkit
 //==================================================================================================
 
 class Device;
-
-typedef struct MOD {
-    unsigned char    cAminoAcid;
-    int     modInd;
-    char    cSymbol;
-    double  dMassDiff;
-} mod_t;
-
-struct ARGS {
-    char *sFasta;
-    char *sSpectra;
-    char *sOut;
-    const char *sParams;
-    const char *sConfig;
-
-    int iPrintLevel;
-    bool bPrintCandidates;
-    bool bSplitOutput;
-    bool bNoDigest;
-    bool bNoMatch;
-    bool bNoScore;
-
-  bool deviceOverride;
-  bool hostMemOverride;
-  bool deviceMemOverride;
-};
-
-struct PARAMS {
-    // digestion
-    char  *sDigestSites;
-    char  *sDigestNoSites;
-    int    iDigestOffset;
-    int    iDigestSpecificity;
-    int    iDigestMaxMissedCleavages;
-    int    iMinPeptideLength;
-    int    iMaxPeptideLength;
-    float  minPeptideMass;
-    float  maxPeptideMass;
-
-    // modifications
-    mod_t *tMods;
-    int    iNumMods;
-    int    iModificationsMax;
-
-    //neutral loss counts
-    int   numAANL;
-    int   numNtermNL;
-    int   numCtermNL;
-
-    bool useAIons;
-    bool useBIons;
-    bool useCIons;
-    bool useXIons;
-    bool useYIons;
-    bool useZIons;
-
-    double dPeptideNtermMass;
-    double dPeptideCtermMass;
-    double dProteinNtermMass;
-    double dProteinCtermMass;
-
-    // precursor (MS1) tolerance
-    float  fPrecursorTolerance;
-    bool   bPrecursorTolerancePPM;
-
-    // fragment (MS2) tolerance
-    float  fFragmentTolerance;
-    bool   bFragmentTolerancePPM;
-    float  fragmentBinOffset;
-
-    // spectra processing
-    bool   bRemovePrecursors;
-    float *fRemoveMzRanges;
-    int    iNumRemoveMzRanges;
-    int    numNormRegions;
-    float  intensityThreshold;
-
-    // similarity scoring
-    int   xcorrTransformWidth;
-    float flankingIntensity;
-    int   numInternalPSMs;
-
-    // output
-    int   numOutputPSMs;
-    bool  bFixDeltaScore;
-};
-
-struct CONFIG {
-    unsigned int iPlatform;
-    std::vector<unsigned int> iDevices;
-    // scan range
-    int minScan;
-    int maxScan;
-    size_t maxHostMem;
-    size_t maxDeviceMem;
-};
-
-struct INFO {
-    // MS/MS scan info
-    int    iNumSpectra;
-    float  fPrecursorBinWidth;
-    int    iNumPrecursorBins;
-    float  fMinPrecursorMass;
-    float  fMaxPrecursorMass;
-
-    // MS/MS peak info
-    long   lNumMS2Peaks;
-    float  fMS2BinWidth;
-    int    iNumMS2Bins;
-    int    iCrossCorrelationWidth;
-
-    // Digest info
-    double dMinPeptideMass;
-    double dMaxPeptideMass;
-    int    iNumProteins;
-    long   lNumPeptides;
-    long   lNumPSMs;
-
-    // Runtime info
-    time_t tStart;
-};
-
-struct GPUINFO {
-    // profiling requests
-    bool   bTimeGPU;
-    bool   bTimeKernel;
-    bool   bTimeSend;
-    bool   bTimeIdle;
-    bool   bTimePrebuild;
-    bool   bCountSyncBlocks; //counts the times when the cpu was blocked for synchronization
-
-    // profiling results
-    int    iNumScoringKernels;
-    float  fTotalTimeGPU;
-    float  fTotalTimeKernel;
-    float  fTotalTimeSend;
-    float  fTotalTimeIdle;
-    float  fTotalTimePrebuild;
-    int    iNumSyncBlocks;
-};
 
 // Candidate Peptide
 typedef struct cobject {
@@ -268,6 +128,163 @@ typedef struct nlValue {
     float weighting;
 } nlValue;
 
+typedef struct MOD {
+    unsigned char    cAminoAcid;
+    int     modInd;
+    char    cSymbol;
+    double  dMassDiff;
+} mod_t;
+
+struct ARGS {
+    char *sFasta;
+    char *sSpectra;
+    char *sOut;
+    const char *sParams;
+    const char *sConfig;
+
+    int iPrintLevel;
+    bool bPrintCandidates;
+    bool bSplitOutput;
+    bool bNoDigest;
+    bool bNoMatch;
+    bool bNoScore;
+
+  bool deviceOverride;
+  bool hostMemOverride;
+  bool deviceMemOverride;
+};
+
+struct PARAMS {
+    //static AA masses
+    double dMassAA[256];
+    
+    // digestion
+    char sDigestSites[26];
+    char sDigestNoSites[26];
+    bool bDigestSites[256];
+    bool bDigestNoSites[256];
+    int iDigestOffset;
+    int iDigestSpecificity;
+    int iDigestMaxMissedCleavages;
+    int iMinPeptideLength;
+    int iMaxPeptideLength;
+    float minPeptideMass;
+    float maxPeptideMass;
+    
+    // modifications
+    mod_t *tMods;
+    int    iNumMods;
+    int    iModificationsMax;
+
+    //neutral loss counts
+    int   numAANL;
+    int   numNtermNL;
+    int   numCtermNL;
+    
+    //neutral losses
+    int numAAModSites[256];
+    char cModSites[256][5];
+    float fModValues[256][5];
+    char unModAA[256];
+    int numNtermModSites;
+    char ntermModSymbols[5];
+    float ntermModMasses[5];
+    int numCtermModSites;
+    char ctermModSymbols[5];
+    float ctermModMasses[5];
+    std::vector<nlValue> nlValuesNterm;
+    std::vector<nlValue> nlValuesCterm;
+    std::vector<nlValue> nlValuesAA;
+    
+    //ion series
+    bool useAIons;
+    bool useBIons;
+    bool useCIons;
+    bool useXIons;
+    bool useYIons;
+    bool useZIons;
+
+    double dPeptideNtermMass;
+    double dPeptideCtermMass;
+    double dProteinNtermMass;
+    double dProteinCtermMass;
+
+    // precursor (MS1) tolerance
+    float  fPrecursorTolerance;
+    bool   bPrecursorTolerancePPM;
+
+    // fragment (MS2) tolerance
+    float  fFragmentTolerance;
+    bool   bFragmentTolerancePPM;
+    float  fragmentBinOffset;
+
+    // spectra processing
+    bool   bRemovePrecursors;
+    float *fRemoveMzRanges;
+    int    iNumRemoveMzRanges;
+    int    numNormRegions;
+    float  intensityThreshold;
+
+    // similarity scoring
+    int   xcorrTransformWidth;
+    float flankingIntensity;
+    int   numInternalPSMs;
+
+    // output
+    int   numOutputPSMs;
+    bool  bFixDeltaScore;
+};
+
+struct CONFIG {
+    unsigned int iPlatform;
+    std::vector<unsigned int> iDevices;
+    // scan range
+    int minScan;
+    int maxScan;
+    size_t maxHostMem;
+    size_t maxDeviceMem;
+    int minWorkSize;
+    bool parallelReduce;
+    bool profile;
+};
+
+struct DATA {
+    // MS/MS scan index
+    eObj **eScanIndex;
+    std::vector<eObj*> eScans;
+    
+    // MS/MS scan info
+    int    iNumSpectra;
+    float  fPrecursorBinWidth;
+    int    iNumPrecursorBins;
+    float  fMinPrecursorMass;
+    float  fMaxPrecursorMass;
+
+    // MS/MS peak data
+    int   *host_iPeakCounts;
+    long  *host_lPeakIndices;
+    cObj  *host_cCandidates;
+    std::vector<int>   host_iPeakBins;
+    std::vector<float> host_fPeakInts;
+
+    // MS/MS peak info
+    long   lNumMS2Peaks;
+    float  fMS2BinWidth;
+    int    iNumMS2Bins;
+    int    iCrossCorrelationWidth;
+
+    // Digest info
+    double dMinPeptideMass;
+    double dMaxPeptideMass;
+    int    iNumProteins;
+    long   lNumPeptides;
+    long   lNumPSMs;
+    char   *sProteinReferences;
+
+    // Runtime info
+    time_t tStart;
+};
+
 class Device {
 private:
     int platformID;
@@ -291,19 +308,19 @@ private:
     std::stack<cl_mem> unusedBuffers;
 
     // global kernels
-    cl_kernel __gpu_build;
-    cl_kernel __gpu_transform;
-    cl_kernel __gpu_score;
-    cl_kernel __gpu_score_reduction;
+    cl_kernel __cl_build;
+    cl_kernel __cl_transform;
+    cl_kernel __cl_score;
+    cl_kernel __cl_reduce_scores;
     cl_kernel __cl_memset;
     //kernel local work dimensions
     size_t build_size;
     size_t transform_size;
     size_t score_size;
-    size_t score_reduction_multiple;
-    size_t score_reduction_size_local;
-    size_t score_reduction_size;
-    size_t score_reduction_size_max;
+    size_t reduce_scores_multiple;
+    size_t reduce_scores_size_local;
+    size_t reduce_scores_size;
+    size_t reduce_scores_size_max;
     size_t memset_size;
     //buffer size
     size_t candidateBufferSize;
@@ -315,7 +332,8 @@ private:
     cl_event buildEvent;
     cl_event memsetEvent;
     cl_event transformEvent;
-    
+
+    //profiling
     long totalScoreTime;
     long totalReduceTime;
     long totalBuildTime;
@@ -366,41 +384,7 @@ namespace Tempest {
     extern struct ARGS args;
     extern struct PARAMS params;
     extern struct CONFIG config;
-    extern struct INFO tempest;
-    extern struct GPUINFO gpu_info;
-    extern struct CLINFO cl_info;
-    
-    extern eObj **eScanIndex;
-    extern std::vector<eObj*> eScans;
-    //extern bool **bScanIndex;
-    extern char *sProteinReferences;
-    
-    extern double dMassAA[256];
-
-    //MEA: rename these
-    extern int numAAModSites[256];
-    extern char cModSites[256][5];
-    extern float fModValues[256][5];
-    extern char unModAA[256];
-    extern int numNtermModSites;
-    extern char ntermModSymbols[5];
-    extern float ntermModMasses[5];
-    extern int numCtermModSites;
-    extern char ctermModSymbols[5];
-    extern float ctermModMasses[5];
-
-    extern std::vector<nlValue> nlValuesNterm;
-    extern std::vector<nlValue> nlValuesCterm;
-    extern std::vector<nlValue> nlValuesAA;
-
-    extern int   *host_iPeakCounts;
-    extern long  *host_lPeakIndices;
-    extern cObj  *host_cCandidates;
-    extern std::vector<int>   host_iPeakBins;
-    extern std::vector<float> host_fPeakInts;
-
-    extern bool* bDigestSites;
-    extern bool* bDigestNoSites;
+    extern struct DATA data;
 
     //==================================================================================================
     //  Functions
@@ -421,11 +405,10 @@ namespace Tempest {
     // output.cpp
     extern void write_psms(void);
     extern void write_log(void);
-
     // params.cpp
     extern void parse_params();
 
-    //config.cpp
+    // config.cpp
     extern void parse_config();
 
     // experimental.cpp

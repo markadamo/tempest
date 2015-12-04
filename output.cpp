@@ -31,13 +31,13 @@ extern void Tempest::write_psms()
     fp = 0;
     
     // allocate host memory
-    if (0 == (mPSMs = (mObj*) malloc(sizeof(mObj)*Tempest::tempest.iNumSpectra*Tempest::params.numInternalPSMs))) {
+    if (0 == (mPSMs = (mObj*) malloc(sizeof(mObj)*Tempest::data.iNumSpectra*Tempest::params.numInternalPSMs))) {
         fprintf(stderr, "\nERROR\tUnable to allocate host memory for results\n");
         Tempest::tempest_exit(EXIT_FAILURE);
     }
 
     // allocate host memory
-    if (0 == (fNextScores = (float*) malloc(sizeof(float)*Tempest::tempest.iNumSpectra))) {
+    if (0 == (fNextScores = (float*) malloc(sizeof(float)*Tempest::data.iNumSpectra))) {
         fprintf(stderr, "\nERROR\tUnable to allocate host memory for results\n");
         Tempest::tempest_exit(EXIT_FAILURE);
     }
@@ -46,9 +46,9 @@ extern void Tempest::write_psms()
     err = 0;
     for (int i=0; i<Tempest::config.iDevices.size(); i++)
         err |= Tempest::devices[i]->get_mPSMs(mPSMs);
-    //cudaMemcpy(mPSMs, gpu_mPSMs, sizeof(mObj)*Tempest::tempest.iNumSpectra*Tempest::params.iNumOutputPSMs, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(mPSMs, gpu_mPSMs, sizeof(mObj)*Tempest::data.iNumSpectra*Tempest::params.iNumOutputPSMs, cudaMemcpyDeviceToHost);
     //err |= Tempest::devices[0]->get_fNextScores(fNextScores);
-    //cudaMemcpy(fNextScores, gpu_fNextScores, sizeof(float)*Tempest::tempest.iNumSpectra, cudaMemcpyDeviceToHost);
+    //cudaMemcpy(fNextScores, gpu_fNextScores, sizeof(float)*Tempest::data.iNumSpectra, cudaMemcpyDeviceToHost);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to transfer results from the device");
     
     // setup single output file
@@ -72,8 +72,8 @@ extern void Tempest::write_psms()
     }
 
     // loop through MS/MS scans
-    for (iBin=0;iBin<Tempest::tempest.iNumPrecursorBins;iBin++) {
-        for (e = Tempest::eScanIndex[iBin]; e; e = e->next) {
+    for (iBin=0;iBin<Tempest::data.iNumPrecursorBins;iBin++) {
+        for (e = Tempest::data.eScanIndex[iBin]; e; e = e->next) {
             // skip if no results
             if (0 == e->iNumCandidates) {
                 fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
@@ -126,7 +126,7 @@ extern void Tempest::write_psms()
                 fprintf(fp, "%d,", e->iNumCandidates);
                 fprintf(fp, "%d,", i+1);
                 fprintf(fp, "%c.%s.%c,", mScanPSMs[i].cBefore, standard_peptide(mScanPSMs[i]), mScanPSMs[i].cAfter);
-                fprintf(fp, "%s,", &Tempest::sProteinReferences[mScanPSMs[i].iProtein * MAX_LENGTH_REFERENCE]);
+                fprintf(fp, "%s,", &Tempest::data.sProteinReferences[mScanPSMs[i].iProtein * MAX_LENGTH_REFERENCE]);
                 fprintf(fp, "%d,", mScanPSMs[i].iNumOccurrences);
                 fprintf(fp, "%.5f,", mScanPSMs[i].fPeptideMass);
                 fprintf(fp, "%.4f,", 1000000.0f * (e->dPrecursorMass - mScanPSMs[i].fPeptideMass) / mScanPSMs[i].fPeptideMass);
@@ -228,12 +228,12 @@ extern void Tempest::write_log()
         }
     }
 
-    for (i=0; i<Tempest::numNtermModSites; i++) {
-        fprintf(log, "Modification:        nterm %c %.4f Da\n", Tempest::ntermModSymbols[i], Tempest::ntermModMasses[i]);
+    for (i=0; i<Tempest::params.numNtermModSites; i++) {
+        fprintf(log, "Modification:        nterm %c %.4f Da\n", Tempest::params.ntermModSymbols[i], Tempest::params.ntermModMasses[i]);
     }
 
-    for (i=0; i<Tempest::numCtermModSites; i++) {
-        fprintf(log, "Modification:        cterm %c %.4f Da\n", Tempest::ctermModSymbols[i], Tempest::ctermModMasses[i]);
+    for (i=0; i<Tempest::params.numCtermModSites; i++) {
+        fprintf(log, "Modification:        cterm %c %.4f Da\n", Tempest::params.ctermModSymbols[i], Tempest::params.ctermModMasses[i]);
     }
 
     fprintf(log, "Precursor Tolerance: %.4f %s\n", Tempest::params.fPrecursorTolerance, Tempest::params.bPrecursorTolerancePPM ? "ppm" : "Da");
@@ -258,12 +258,12 @@ extern void Tempest::write_log()
     fprintf(log, "\n");
 
     //summary
-    fprintf(log, "Spectra:  %d\n", Tempest::tempest.iNumSpectra);
-    fprintf(log, "Masses:   %.5f - %.5f Da\n", Tempest::tempest.fMinPrecursorMass, Tempest::tempest.fMaxPrecursorMass);
-    fprintf(log, "Proteins: %d\n", Tempest::tempest.iNumProteins);
-    fprintf(log, "Peptides: %ld\n", Tempest::tempest.lNumPeptides);
-    fprintf(log, "PSMs:     %ld\n", Tempest::tempest.lNumPSMs);
-    fprintf(log, "Runtime:  %lus\n", (unsigned long int) tTime-Tempest::tempest.tStart);
+    fprintf(log, "Spectra:  %d\n", Tempest::data.iNumSpectra);
+    fprintf(log, "Masses:   %.5f - %.5f Da\n", Tempest::data.fMinPrecursorMass, Tempest::data.fMaxPrecursorMass);
+    fprintf(log, "Proteins: %d\n", Tempest::data.iNumProteins);
+    fprintf(log, "Peptides: %ld\n", Tempest::data.lNumPeptides);
+    fprintf(log, "PSMs:     %ld\n", Tempest::data.lNumPSMs);
+    fprintf(log, "Runtime:  %lus\n", (unsigned long int) tTime-Tempest::data.tStart);
     
 }
 
@@ -278,17 +278,17 @@ char* standard_peptide(mObj psm) {
             sModPeptide[i++] = *c;
         }
         else {
-            sModPeptide[i++] = Tempest::unModAA[*c];
-            sModPeptide[i++] = Tempest::cModSites[Tempest::unModAA[*c]][Tempest::getModInd(*c)];
+            sModPeptide[i++] = Tempest::params.unModAA[*c];
+            sModPeptide[i++] = Tempest::params.cModSites[Tempest::params.unModAA[*c]][Tempest::getModInd(*c)];
         }
 
         if (c==psm.sPeptide && psm.ntermMod) {
-            sModPeptide[i++] = Tempest::ntermModSymbols[psm.ntermMod-1];
+            sModPeptide[i++] = Tempest::params.ntermModSymbols[psm.ntermMod-1];
         }
     }
 
     if (psm.ctermMod) {
-        sModPeptide[i++] = Tempest::ctermModSymbols[psm.ctermMod-1];
+        sModPeptide[i++] = Tempest::params.ctermModSymbols[psm.ctermMod-1];
     }
 
     sModPeptide[i] = '\0';

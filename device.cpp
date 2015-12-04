@@ -1,4 +1,5 @@
 #include "tempest.hpp"
+#include "kernels.h"
 
 /*
  * Launches a kernel to perform parallel memset on a block of device memory
@@ -19,51 +20,55 @@ void Device::setup_constant_memory() {
 
     // convert the double masses to floats
     for (int iResidue=0; iResidue < 256; iResidue++) {
-        fMassAA[iResidue] = (float) Tempest::dMassAA[iResidue];
+        fMassAA[iResidue] = (float) Tempest::params.dMassAA[iResidue];
     }
 
-    cl_mem GPU_MASS_AA      = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 256*sizeof(float), &fMassAA, &err);
-    cl_mem UN_MOD_AA        = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 256*sizeof(char),  &Tempest::unModAA, &err);
-    cl_mem NTERM_MOD_MASSES = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 5*sizeof(float),  &Tempest::ntermModMasses, &err);
-    cl_mem CTERM_MOD_MASSES = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 5*sizeof(float),  &Tempest::ctermModMasses, &err);
+    cl_mem CL_MASS_AA      = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 256*sizeof(float), &fMassAA, &err);
+    cl_mem UN_MOD_AA        = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 256*sizeof(char),  &Tempest::params.unModAA, &err);
+    cl_mem NTERM_MOD_MASSES = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 5*sizeof(float),  &Tempest::params.ntermModMasses, &err);
+    cl_mem CTERM_MOD_MASSES = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 5*sizeof(float),  &Tempest::params.ctermModMasses, &err);
     
     //neutral losses
     //transfer to device
     if (Tempest::params.numNtermNL)
-        cl_nlValuesNterm = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nlValue)*Tempest::nlValuesNterm.size(), &Tempest::nlValuesNterm[0], &err);
+        cl_nlValuesNterm = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nlValue)*Tempest::params.nlValuesNterm.size(), &Tempest::params.nlValuesNterm[0], &err);
     if (Tempest::params.numCtermNL)
-        cl_nlValuesCterm = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nlValue)*Tempest::nlValuesCterm.size(), &Tempest::nlValuesCterm[0], &err);
+        cl_nlValuesCterm = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nlValue)*Tempest::params.nlValuesCterm.size(), &Tempest::params.nlValuesCterm[0], &err);
     if (Tempest::params.numAANL)
-        cl_nlValuesAA = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nlValue)*Tempest::nlValuesAA.size(), &Tempest::nlValuesAA[0], &err);
+        cl_nlValuesAA = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(nlValue)*Tempest::params.nlValuesAA.size(), &Tempest::params.nlValuesAA[0], &err);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to copy device constant memory");
     
     //pre-set these constant arrays as arguments to scoring kernels (re-used in every launch)
-    err  = clSetKernelArg(__gpu_build, 1, sizeof(int),    &Tempest::tempest.iNumMS2Bins);
-    err |= clSetKernelArg(__gpu_build, 3, sizeof(cl_mem), &cl_iPeakBins);
-    err |= clSetKernelArg(__gpu_build, 4, sizeof(cl_mem), &cl_fPeakInts);
-    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__gpu_build)");
+    err  = clSetKernelArg(__cl_build, 2, sizeof(cl_mem), &cl_iPeakBins);
+    err |= clSetKernelArg(__cl_build, 3, sizeof(cl_mem), &cl_fPeakInts);
+    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__cl_build)");
 
-    err = clSetKernelArg(__gpu_transform, 1, sizeof(int),  &Tempest::tempest.iNumMS2Bins);
-    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__gpu_transform)");
+    err = clSetKernelArg(__cl_transform, 1, sizeof(int),  &Tempest::data.iNumMS2Bins);
+    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__cl_transform)");
 
-    err  = clSetKernelArg(__gpu_score, 2, sizeof(cl_mem), &cl_cCandidates);
-    err |= clSetKernelArg(__gpu_score, 3, sizeof(cl_mem), &cl_fScores);
-    err |= clSetKernelArg(__gpu_score, 6, sizeof(int),    &Tempest::tempest.iNumMS2Bins);
-    err |= clSetKernelArg(__gpu_score, 7, sizeof(cl_mem), &GPU_MASS_AA);
-    err |= clSetKernelArg(__gpu_score, 8, sizeof(cl_mem), &NTERM_MOD_MASSES);
-    err |= clSetKernelArg(__gpu_score, 9, sizeof(cl_mem), &CTERM_MOD_MASSES);
-    err |= clSetKernelArg(__gpu_score, 10, sizeof(cl_mem), Tempest::params.numNtermNL ? &cl_nlValuesNterm : NULL);
-    err |= clSetKernelArg(__gpu_score, 11, sizeof(cl_mem), Tempest::params.numCtermNL ? &cl_nlValuesCterm : NULL);
-    err |= clSetKernelArg(__gpu_score, 12, sizeof(cl_mem), Tempest::params.numAANL ? &cl_nlValuesAA : NULL);
-    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__gpu_score)");
+    err  = clSetKernelArg(__cl_score, 2, sizeof(cl_mem), &cl_cCandidates);
+    err |= clSetKernelArg(__cl_score, 3, sizeof(cl_mem), &cl_fScores);
+    err |= clSetKernelArg(__cl_score, 6, sizeof(int),    &Tempest::data.iNumMS2Bins);
+    err |= clSetKernelArg(__cl_score, 7, sizeof(cl_mem), &CL_MASS_AA);
+    err |= clSetKernelArg(__cl_score, 8, sizeof(cl_mem), &NTERM_MOD_MASSES);
+    err |= clSetKernelArg(__cl_score, 9, sizeof(cl_mem), &CTERM_MOD_MASSES);
+    err |= clSetKernelArg(__cl_score, 10, sizeof(cl_mem), Tempest::params.numNtermNL ? &cl_nlValuesNterm : NULL);
+    err |= clSetKernelArg(__cl_score, 11, sizeof(cl_mem), Tempest::params.numCtermNL ? &cl_nlValuesCterm : NULL);
+    err |= clSetKernelArg(__cl_score, 12, sizeof(cl_mem), Tempest::params.numAANL ? &cl_nlValuesAA : NULL);
+    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__cl_score)");
 
-    size_t zMemShared = this->score_reduction_size * (sizeof(int) + sizeof(float));
-    err  = clSetKernelArg(__gpu_score_reduction, 0, sizeof(int), &(this->candidateBufferSize));
-    err |= clSetKernelArg(__gpu_score_reduction, 1, sizeof(cl_mem), &cl_cCandidates);
-    err |= clSetKernelArg(__gpu_score_reduction, 2, sizeof(cl_mem), &cl_fScores);
-    err |= clSetKernelArg(__gpu_score_reduction, 3, sizeof(cl_mem), &cl_mPSMs);
-    err |= clSetKernelArg(__gpu_score_reduction, 6, zMemShared, NULL);
-    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__gpu_score_reduction)");
+    size_t matchesLocalSize = this->reduce_scores_size * sizeof(int);
+    size_t scoresLocalSize = this->reduce_scores_size * sizeof(float);
+    err  = clSetKernelArg(__cl_reduce_scores, 0, sizeof(int), &(this->candidateBufferSize));
+    err |= clSetKernelArg(__cl_reduce_scores, 1, sizeof(cl_mem), &cl_cCandidates);
+    err |= clSetKernelArg(__cl_reduce_scores, 2, sizeof(cl_mem), &cl_fScores);
+    err |= clSetKernelArg(__cl_reduce_scores, 3, sizeof(cl_mem), &cl_mPSMs);
+    if (Tempest::config.parallelReduce) {
+        //err |= clSetKernelArg(__cl_reduce_scores, 5, zMemShared, NULL);
+        err |= clSetKernelArg(__cl_reduce_scores, 5, this->reduce_scores_size * sizeof(int), NULL);
+        err |= clSetKernelArg(__cl_reduce_scores, 6, this->reduce_scores_size * sizeof(float), NULL);
+    }
+    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to set constant args (__cl_reduce_scores)");
     
 }
 
@@ -71,62 +76,35 @@ void Device::create_kernels() {
     int err;
     size_t paramBuffer;
     
-    this->__gpu_build = clCreateKernel(clProgram, "gpu_build", &err);
+    this->__cl_build = clCreateKernel(clProgram, "cl_build", &err);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
-    //clGetKernelWorkGroupInfo(__gpu_build, this->clDeviceID, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    //printf("gpu_build: WORK_GROUP_SIZE=%ld\n", paramBuffer);
-    //clGetKernelWorkGroupInfo(__gpu_build, this->clDeviceID, CL_KERNEL_LOCAL_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    //printf("gpu_build: LOCAL_MEM_SIZE=%ld\n", paramBuffer);
-    clGetKernelWorkGroupInfo(__gpu_build, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->build_size), NULL);
-    //printf("gpu_build: PREFERRED_WORK_GROUP_SIZE_MULTIPLE=%ld\n", this->build_size);
-    //clGetKernelWorkGroupInfo(__gpu_build, this->clDeviceID, CL_KERNEL_PRIVATE_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    //printf("gpu_build: PRIVATE_MEM_SIZE=%ld\n", paramBuffer);
+    //clGetKernelWorkGroupInfo(__cl_build, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->build_size), NULL);
+    clGetKernelWorkGroupInfo(__cl_build, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->build_size), NULL);
+    if (this->build_size < Tempest::config.minWorkSize)
+        this->build_size = Tempest::config.minWorkSize;
     
-    this->__gpu_transform = clCreateKernel(clProgram, "gpu_transform", &err);
+    this->__cl_transform = clCreateKernel(clProgram, "cl_transform", &err);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
-    // clGetKernelWorkGroupInfo(__gpu_transform, this->clDeviceID, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("gpu_transform: WORK_GROUP_SIZE=%ld\n", paramBuffer);
-    // clGetKernelWorkGroupInfo(__gpu_transform, this->clDeviceID, CL_KERNEL_LOCAL_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("gpu_transform: LOCAL_MEM_SIZE=%ld\n", paramBuffer);
-    clGetKernelWorkGroupInfo(__gpu_transform, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->transform_size), NULL);
-    //printf("gpu_transform: PREFERRED_WORK_GROUP_SIZE_MULTIPLE=%ld\n", paramBuffer);
-    //clGetKernelWorkGroupInfo(__gpu_transform, this->clDeviceID, CL_KERNEL_PRIVATE_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    //printf("gpu_transform: PRIVATE_MEM_SIZE=%ld\n", paramBuffer);
+    clGetKernelWorkGroupInfo(__cl_transform, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->transform_size), NULL);
+    if (this->transform_size < Tempest::config.minWorkSize)
+        this->transform_size = Tempest::config.minWorkSize;   
     
-    this->__gpu_score = clCreateKernel(clProgram, "gpu_score", &err);
+    this->__cl_score = clCreateKernel(clProgram, "cl_score", &err);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
-    // clGetKernelWorkGroupInfo(__gpu_score, this->clDeviceID, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("gpu_score: WORK_GROUP_SIZE=%ld\n", paramBuffer);
-    // clGetKernelWorkGroupInfo(__gpu_score, this->clDeviceID, CL_KERNEL_LOCAL_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("gpu_score: LOCAL_MEM_SIZE=%ld\n", paramBuffer);
-    clGetKernelWorkGroupInfo(__gpu_score, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->score_size), NULL);
-    //this->score_size = 1;
-    // printf("gpu_score: PREFERRED_WORK_GROUP_SIZE_MULTIPLE=%ld\n", paramBuffer);
-    // clGetKernelWorkGroupInfo(__gpu_score, this->clDeviceID, CL_KERNEL_PRIVATE_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("gpu_score: PRIVATE_MEM_SIZE=%ld\n", paramBuffer);
+    clGetKernelWorkGroupInfo(__cl_score, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->score_size), NULL);
+    if (this->score_size < Tempest::config.minWorkSize)
+      this->score_size = Tempest::config.minWorkSize;  
     
-    this->__gpu_score_reduction = clCreateKernel(clProgram, "gpu_score_reduction", &err);
+    this->__cl_reduce_scores = clCreateKernel(clProgram, Tempest::config.parallelReduce ? "cl_reduce_scores_parallel" : "cl_reduce_scores_sequential", &err);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
-    clGetKernelWorkGroupInfo(__gpu_score_reduction, this->clDeviceID, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &(this->score_reduction_size_max), NULL);
-    //printf("gpu_score_reduction: WORK_GROUP_SIZE=%ld\n", this->score_reduction_size_max);
-    clGetKernelWorkGroupInfo(__gpu_score_reduction, this->clDeviceID, CL_KERNEL_LOCAL_MEM_SIZE, sizeof(size_t), &(this->score_reduction_size_local), NULL);
-    //printf("gpu_score_reduction: LOCAL_MEM_SIZE=%ld\n", this->score_reduction_size_local);
-    clGetKernelWorkGroupInfo(__gpu_score_reduction, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &this->score_reduction_multiple, NULL);
-    //printf("gpu_score_reduction: PREFERRED_WORK_GROUP_SIZE_MULTIPLE=%ld\n", this->score_reduction_multiple);
-    clGetKernelWorkGroupInfo(__gpu_score_reduction, this->clDeviceID, CL_KERNEL_PRIVATE_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    //printf("gpu_score_reduction: PRIVATE_MEM_SIZE=%ld\n", paramBuffer);
+    clGetKernelWorkGroupInfo(__cl_reduce_scores, this->clDeviceID, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &(this->reduce_scores_size_max), NULL);
+    clGetKernelWorkGroupInfo(__cl_reduce_scores, this->clDeviceID, CL_KERNEL_LOCAL_MEM_SIZE, sizeof(size_t), &(this->reduce_scores_size_local), NULL);
+    clGetKernelWorkGroupInfo(__cl_reduce_scores, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &this->reduce_scores_multiple, NULL);
      
-    this->__cl_memset = clCreateKernel(clProgram, "cl_memset", &err);
-    Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
-    // clGetKernelWorkGroupInfo(__cl_memset, this->clDeviceID, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("cl_memset: WORK_GROUP_SIZE=%ld\n", paramBuffer);
-    // clGetKernelWorkGroupInfo(__cl_memset, this->clDeviceID, CL_KERNEL_LOCAL_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("cl_memset: LOCAL_MEM_SIZE=%ld\n", paramBuffer);
-    clGetKernelWorkGroupInfo(__cl_memset, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->memset_size), NULL);
+    // this->__cl_memset = clCreateKernel(clProgram, "cl_memset", &err);
+    // Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to create kernel");
+    // clGetKernelWorkGroupInfo(__cl_memset, this->clDeviceID, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t), &(this->memset_size), NULL);
     // printf("cl_memset: PREFERRED_WORK_GROUP_SIZE_MULTIPLE=%ld\n", paramBuffer);
-    // clGetKernelWorkGroupInfo(__cl_memset, this->clDeviceID, CL_KERNEL_PRIVATE_MEM_SIZE, sizeof(size_t), &paramBuffer, NULL);
-    // printf("cl_memset: PRIVATE_MEM_SIZE=%ld\n", paramBuffer);
-    
 }
 
 Device::Device(int platformID, int deviceInd) {
@@ -177,7 +155,7 @@ Device::Device(int platformID, int deviceInd) {
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Error creating context");
 
     /* Create a command queue */
-    clCommandQueue = clCreateCommandQueue(clContext, clDeviceID, PROFILE ? CL_QUEUE_PROFILING_ENABLE : 0, &err);
+    clCommandQueue = clCreateCommandQueue(clContext, clDeviceID, Tempest::config.profile ? CL_QUEUE_PROFILING_ENABLE : 0, &err);
     if(err < 0) {
         perror("Couldn't create a command queue");
         exit(1);   
@@ -203,6 +181,7 @@ Device::Device(int platformID, int deviceInd) {
     char options[1024];
 
     /* Read program file and place content into buffer */
+    /*
     program_handle = fopen(KERNEL_FILE, "r");
     if(program_handle == NULL) {
         perror("Couldn't find the .cl program file");
@@ -215,18 +194,22 @@ Device::Device(int platformID, int deviceInd) {
     program_buffer[program_size] = '\0';
     int bytesRead = fread(program_buffer, sizeof(char), program_size, program_handle);
     fclose(program_handle);
+    */
 
-    /* Create program from file */
-    clProgram = clCreateProgramWithSource(clContext, 1, (const char**)&program_buffer, &program_size, &err);
-    
-    //clProgram = clCreateProgramWithSource(clContext, 1, &kernels_cl_const, &kernels_cl_len, &err);
+    // Create program from file
+    //clProgram = clCreateProgramWithSource(clContext, 1, (const char**)&program_buffer, &program_size, &err);
+
+    // Create program from embedded source
+    const char* kernels_ptr = (const char*)&(kernels_cl[0]);
+    size_t kernels_size = (size_t)kernels_cl_len;
+    clProgram = clCreateProgramWithSource(clContext, 1, &kernels_ptr, &kernels_size, &err);
     if(err < 0) {
-        perror("Couldn't create the .cl program");
+        perror("Couldn't create the kernels program");
         exit(1);
     }
-    free(program_buffer);
+    //free(program_buffer);
 
-    /* Define known constants as literals to build into the program */
+    // Define known constants as literals to build into the program
     float fMassProteinNterm = (float) Tempest::params.dProteinNtermMass;
     float fMassPeptideNterm = (float) Tempest::params.dPeptideNtermMass;
     sprintf(options,                   "-DPRIMARY_INTENSITY=%d ",      PRIMARY_INTENSITY);
@@ -239,33 +222,27 @@ Device::Device(int platformID, int deviceInd) {
     sprintf(options + strlen(options), "-DNH3_MASS=%f ",               NH3_MASS);
     sprintf(options + strlen(options), "-DH2O_MASS=%f ",               H2O_MASS);
     sprintf(options + strlen(options), "-DCO_MASS=%f ",                CO_MASS);
-    sprintf(options + strlen(options), "-DGPU_MASS_PROTEIN_NTERM=%f ", fMassProteinNterm);
-    sprintf(options + strlen(options), "-DGPU_MASS_PEPTIDE_NTERM=%f ", fMassPeptideNterm);
+    sprintf(options + strlen(options), "-DMASS_PROTEIN_NTERM=%f ",     fMassProteinNterm);
+    sprintf(options + strlen(options), "-DMASS_PEPTIDE_NTERM=%f ",     fMassPeptideNterm);
     sprintf(options + strlen(options), "-DMAX_PEPTIDE_LENGTH=%d ",     MAX_PEPTIDE_LENGTH);
-    sprintf(options + strlen(options), "-DNUM_OUTPUT_PSMS=%d ",        Tempest::params.numInternalPSMs);
+    sprintf(options + strlen(options), "-DNUM_INTERNAL_PSMS=%d ",      Tempest::params.numInternalPSMs);
     sprintf(options + strlen(options), "-DUSE_A_IONS=%d ",             Tempest::params.useAIons);
     sprintf(options + strlen(options), "-DUSE_B_IONS=%d ",             Tempest::params.useBIons);
     sprintf(options + strlen(options), "-DUSE_C_IONS=%d ",             Tempest::params.useCIons);
     sprintf(options + strlen(options), "-DUSE_X_IONS=%d ",             Tempest::params.useXIons);
     sprintf(options + strlen(options), "-DUSE_Y_IONS=%d ",             Tempest::params.useYIons);
     sprintf(options + strlen(options), "-DUSE_Z_IONS=%d ",             Tempest::params.useZIons);
-    sprintf(options + strlen(options), "-DGPU_TOLERANCE=%f ",          Tempest::params.fFragmentTolerance);
+    sprintf(options + strlen(options), "-DFRAGMENT_TOLERANCE=%f ",     Tempest::params.fFragmentTolerance);
     sprintf(options + strlen(options), "-DFRAGMENT_BIN_OFFSET=%f ",    Tempest::params.fragmentBinOffset);
-    sprintf(options + strlen(options), "-DGPU_NUM_OUTPUT_PSMS=%d ",    Tempest::params.numInternalPSMs);
-    sprintf(options + strlen(options), "-DFLANKING_INTENSITY=%f ",     Tempest::params.flankingIntensity);
     sprintf(options + strlen(options), "-DNUM_AA_NL=%d ",              Tempest::params.numAANL);
     sprintf(options + strlen(options), "-DNUM_NTERM_NL=%d ",           Tempest::params.numNtermNL);
     sprintf(options + strlen(options), "-DNUM_CTERM_NL=%d ",           Tempest::params.numCtermNL);
-    sprintf(options + strlen(options), "-DGPU_FIX_DELTA_SCORE=%d ",    Tempest::params.bFixDeltaScore && (Tempest::params.iNumMods > 0));
     sprintf(options + strlen(options), "-DXCORR_TRANSFORM_WIDTH=%d ",  Tempest::params.xcorrTransformWidth);
-    //sprintf(options + strlen(options), "-DGPU_NUM_BINS=%d ",           Tempest::tempest.iNumMS2Bins);
-    //sprintf(options + strlen(options), "-cl-nv-maxrregcount=16");
-    //sprintf(options + strlen(options), "-g ");
     sprintf(options + strlen(options), "-cl-single-precision-constant");
    
     /* Build program */
     err = clBuildProgram(clProgram, 0, NULL, options, NULL, NULL);
-    if(PROFILE || err < 0) {
+    if(Tempest::config.profile || err < 0) {
 
         /* Find size of log and print to std output */
         clGetProgramBuildInfo(clProgram, clDeviceID, CL_PROGRAM_BUILD_LOG, 
@@ -289,35 +266,39 @@ void Device::setup(unsigned int minScan, unsigned int maxScan) {
     this->maxScan = maxScan;
     
     // Determine Configuration
-    this->candidateBufferSize = this->score_reduction_multiple;
-    this->score_reduction_size = this->score_reduction_multiple;
+    this->candidateBufferSize = this->reduce_scores_multiple;
+    this->reduce_scores_size = this->reduce_scores_multiple;
 
-    size_t hostMem = sizeof(mObj) * Tempest::tempest.iNumSpectra * Tempest::params.numInternalPSMs
-      + sizeof(eObj) * Tempest::tempest.iNumSpectra
-      + sizeof(cl_mem) * Tempest::tempest.iNumSpectra
-      + sizeof(std::vector<int>) + sizeof(int)*Tempest::host_iPeakBins.size()
-      + sizeof(std::vector<float>) + sizeof(float)*Tempest::host_fPeakInts.size()
-      + sizeof(int)*Tempest::tempest.iNumSpectra
-      + sizeof(long)*Tempest::tempest.iNumSpectra;
-    for (int candidateBufferSize=this->score_reduction_multiple; hostMem + candidateBufferSize*Tempest::tempest.iNumSpectra*sizeof(cObj) < Tempest::config.maxHostMem; candidateBufferSize += this->score_reduction_multiple) {
-        for (int scoreReductionSize = 1;
-             scoreReductionSize <= candidateBufferSize
-                 && scoreReductionSize <= this->score_reduction_size_max
-                 && scoreReductionSize*(sizeof(int)+sizeof(float)) + this->score_reduction_size_local <= this->lLocalMemSize;
-             scoreReductionSize *= 2) {
-            if (scoreReductionSize%(this->score_reduction_multiple) == 0 && candidateBufferSize%scoreReductionSize == 0)
-                if (candidateBufferSize * scoreReductionSize > this->candidateBufferSize * this->score_reduction_size) {
+    size_t hostMem = sizeof(mObj) * Tempest::data.iNumSpectra * Tempest::params.numInternalPSMs
+      + sizeof(eObj) * Tempest::data.iNumSpectra
+      + sizeof(cl_mem) * Tempest::data.iNumSpectra
+      + sizeof(std::vector<int>) + sizeof(int)*Tempest::data.host_iPeakBins.size()
+      + sizeof(std::vector<float>) + sizeof(float)*Tempest::data.host_fPeakInts.size()
+      + sizeof(int)*Tempest::data.iNumSpectra
+      + sizeof(long)*Tempest::data.iNumSpectra;
+    for (int candidateBufferSize=this->reduce_scores_multiple; hostMem + candidateBufferSize*Tempest::data.iNumSpectra*sizeof(cObj) < Tempest::config.maxHostMem; candidateBufferSize += this->reduce_scores_multiple) {
+        for (int reduceScoresSize = 1;
+             reduceScoresSize <= candidateBufferSize
+                 && reduceScoresSize <= this->reduce_scores_size_max
+                 && reduceScoresSize*(sizeof(int) + sizeof(float)) + this->reduce_scores_size_local <= this->lLocalMemSize;
+             reduceScoresSize *= 2) {
+            if (reduceScoresSize%(this->reduce_scores_multiple) == 0 && candidateBufferSize%reduceScoresSize == 0)
+                if (candidateBufferSize * reduceScoresSize > this->candidateBufferSize * this->reduce_scores_size) {
                     this->candidateBufferSize = candidateBufferSize;
-                    this->score_reduction_size = scoreReductionSize;
+                    this->reduce_scores_size = reduceScoresSize;
                 }	    
         }
     }
-    //printf("Candidate buffer size=%ld\n", this->candidateBufferSize);
-    //printf("Reduction size: %ld\n", this->score_reduction_size);
-
+    if (Tempest::config.profile) {
+        printf("cl_build: local_work_size=%ld\n", this->build_size);
+        printf("cl_transform: local_work_size=%ld\n", this->transform_size);
+        printf("cl_score: local_work_size=%ld\n", this->score_size);
+        printf("candidate buffer size=%ld\n", this->candidateBufferSize);
+        printf("cl_reduce_scores: local_work_size=%ld\n", this->reduce_scores_size);
+    }
 
     for (int i=minScan+deviceInd; i<maxScan; i+=Tempest::config.iDevices.size()) {
-        eObj* e = Tempest::eScans[i];
+        eObj* e = Tempest::data.eScans[i];
         e->candidateBuffer = (cObj*)malloc(this->candidateBufferSize * sizeof(cObj));
         e->candidateBufferSize = this->candidateBufferSize;
         e->clEventSent = clCreateUserEvent(clContext, NULL);
@@ -326,31 +307,33 @@ void Device::setup(unsigned int minScan, unsigned int maxScan) {
     }
 
     // peaks
-    size_t size_iPeakBins = Tempest::tempest.lNumMS2Peaks * sizeof(cl_int);
-    size_t size_fPeakInts = Tempest::tempest.lNumMS2Peaks * sizeof(cl_float);
-    cl_iPeakBins = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_iPeakBins, &(Tempest::host_iPeakBins[0]), &err);
+    size_t size_iPeakBins = Tempest::data.lNumMS2Peaks * sizeof(cl_int);
+    size_t size_fPeakInts = Tempest::data.lNumMS2Peaks * sizeof(cl_float);
+    cl_iPeakBins = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_iPeakBins, &(Tempest::data.host_iPeakBins[0]), &err);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to allocate device memory for peak bins.");
-    cl_fPeakInts = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_fPeakInts, &(Tempest::host_fPeakInts[0]), &err);
+    cl_fPeakInts = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_fPeakInts, &(Tempest::data.host_fPeakInts[0]), &err);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to allocate device memory for peak intensities.");
     
     // cleanup host
-    //std::vector<int>().swap(Tempest::host_iPeakBins);
-    //std::vector<float>().swap(Tempest::host_fPeakInts);
+    //std::vector<int>().swap(Tempest::data.host_iPeakBins);
+    //std::vector<float>().swap(Tempest::data.host_fPeakInts);
 
-    //cudaMalloc((void**) &gpu_fSpectra, Tempest::tempest.iNumMS2Bins * sizeof(float));
-    //cl_fSpectra = clCreateBuffer(clContext, CL_MEM_READ_WRITE, Tempest::tempest.iNumMS2Bins * sizeof(float), NULL, &err);
-    float * init_fSpectra = (float *) calloc(Tempest::tempest.iNumMS2Bins, sizeof(float));
-    size_t size_init_fSpectra = Tempest::tempest.iNumMS2Bins * sizeof(cl_float);
+    //cudaMalloc((void**) &cl_fSpectra, Tempest::data.iNumMS2Bins * sizeof(float));
+    //cl_fSpectra = clCreateBuffer(clContext, CL_MEM_READ_WRITE, Tempest::data.iNumMS2Bins * sizeof(float), NULL, &err);
+    float * init_fSpectra = (float *) calloc(Tempest::data.iNumMS2Bins, sizeof(float));
+    size_t size_init_fSpectra = Tempest::data.iNumMS2Bins * sizeof(cl_float);
     cl_init_fSpectra = clCreateBuffer(clContext, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, size_init_fSpectra, init_fSpectra, &err);
     free(init_fSpectra);
     
     // candidate and results
-    mObj * init_mPSMs = (mObj *) calloc(Tempest::tempest.iNumSpectra * Tempest::params.numInternalPSMs, sizeof(mObj)); 
-    //float * init_fNextScores = (float *) calloc(Tempest::tempest.iNumSpectra, sizeof(float));
+    mObj * init_mPSMs = (mObj *) calloc(Tempest::data.iNumSpectra * Tempest::params.numInternalPSMs, sizeof(mObj));
+    // for (int i=0; i<Tempest::data.iNumSpectra * Tempest::params.numInternalPSMs; i++)
+    //     init_mPSMs[i].fScore = MIN_SCORE;
+    //float * init_fNextScores = (float *) calloc(Tempest::data.iNumSpectra, sizeof(float));
     size_t size_cCandidates = sizeof(cObj) * this->candidateBufferSize;
     size_t size_fScores = sizeof(cl_float)  * this->candidateBufferSize;
-    size_t size_mPSMs = sizeof(mObj)  * Tempest::tempest.iNumSpectra * Tempest::params.numInternalPSMs;
-    //size_t size_fNextScores = sizeof(float) * Tempest::tempest.iNumSpectra;
+    size_t size_mPSMs = sizeof(mObj)  * Tempest::data.iNumSpectra * Tempest::params.numInternalPSMs;
+    //size_t size_fNextScores = sizeof(float) * Tempest::data.iNumSpectra;
     cl_cCandidates = clCreateBuffer(clContext, CL_MEM_READ_ONLY, size_cCandidates, NULL, &err);
     cl_fScores = clCreateBuffer(clContext, CL_MEM_READ_WRITE, size_fScores, NULL, &err);  
     cl_mPSMs = clCreateBuffer(clContext, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, size_mPSMs , init_mPSMs, &err);
@@ -370,15 +353,15 @@ void Device::setup(unsigned int minScan, unsigned int maxScan) {
         - size_mPSMs;
     if (availMemSpectra > Tempest::config.maxDeviceMem)
         availMemSpectra = Tempest::config.maxDeviceMem;
-    long maxCachedSpectra = availMemSpectra / (Tempest::tempest.iNumMS2Bins*sizeof(cl_float));
-    if (maxCachedSpectra > (long)ceil(float(Tempest::tempest.iNumSpectra)/Tempest::devices.size()))
-        maxCachedSpectra = (long)ceil(float(Tempest::tempest.iNumSpectra)/Tempest::devices.size());
+    long maxCachedSpectra = availMemSpectra / (Tempest::data.iNumMS2Bins*sizeof(cl_float));
+    if (maxCachedSpectra > (long)ceil(float(Tempest::data.iNumSpectra)/Tempest::devices.size()))
+        maxCachedSpectra = (long)ceil(float(Tempest::data.iNumSpectra)/Tempest::devices.size());
     if (maxCachedSpectra <= 0)
         maxCachedSpectra = 1;
     
-    printf(" » (%d:%d) Allocating %.2f MB of device memory for %ld cached %s.\n", platformID, deviceID, (float)maxCachedSpectra*Tempest::tempest.iNumMS2Bins*sizeof(cl_float)/MB, maxCachedSpectra, maxCachedSpectra==1 ? "spectrum" : "spectra");
+    printf(" » (%d:%d) Allocating %.2f MB of device memory for %ld cached %s.\n", platformID, deviceID, (float)maxCachedSpectra*Tempest::data.iNumMS2Bins*sizeof(cl_float)/MB, maxCachedSpectra, maxCachedSpectra==1 ? "spectrum" : "spectra");
     for (int i=0; i<maxCachedSpectra; i++) {
-        cl_mem newBuffer = clCreateBuffer(clContext, CL_MEM_READ_WRITE, Tempest::tempest.iNumMS2Bins*sizeof(cl_float), NULL, &err);
+        cl_mem newBuffer = clCreateBuffer(clContext, CL_MEM_READ_WRITE, Tempest::data.iNumMS2Bins*sizeof(cl_float), NULL, &err);
         Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to allocate spectrum memory on device.");
         unusedBuffers.push(newBuffer);
     }
@@ -410,10 +393,10 @@ void Device::scoreCandidates(eObj *e) {
     static cObj* p;
     //static size_t iNumBlocks;
     static size_t stGlobalDim;
-    static size_t globalTransDim = Tempest::mround(Tempest::tempest.iNumMS2Bins, this->transform_size);
+    static size_t globalTransDim = Tempest::mround(Tempest::data.iNumMS2Bins, this->transform_size);
     static float fElapsedTime;
-    long lSpectrumOffset = e->lIndex*Tempest::tempest.iNumMS2Bins;
-    long lScratchOffset = (long)Tempest::tempest.iCrossCorrelationWidth;
+    long lSpectrumOffset = e->lIndex*Tempest::data.iNumMS2Bins;
+    long lScratchOffset = (long)Tempest::data.iCrossCorrelationWidth;
     long lNoOffset = 0;
     int err;
     cl_ulong start;
@@ -422,7 +405,7 @@ void Device::scoreCandidates(eObj *e) {
     err = clEnqueueWriteBuffer(clCommandQueue, cl_cCandidates, CL_FALSE, 0, sizeof(cObj) * e->iNumBufferedCandidates, e->candidateBuffer, 0, NULL, &(e->clEventSent));
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to copy candidate data from host to GPU");
 	
-    stGlobalDim = Tempest::mround(Tempest::host_iPeakCounts[e->lIndex], this->build_size);
+    stGlobalDim = Tempest::mround(Tempest::data.host_iPeakCounts[e->lIndex], this->build_size);
     cl_mem spectrumBuffer;
 
     std::map<long,cl_mem>::iterator s2bElem = spectrum2buffer.find(e->lIndex);
@@ -438,7 +421,7 @@ void Device::scoreCandidates(eObj *e) {
         spectrum2buffer[e->lIndex] = spectrumBuffer;
 
         //initialize buffer
-        err = clEnqueueCopyBuffer(clCommandQueue, cl_init_fSpectra, spectrumBuffer, 0, 0, Tempest::tempest.iNumMS2Bins*sizeof(cl_float), 0, NULL, PROFILE ? &memsetEvent : NULL);
+        err = clEnqueueCopyBuffer(clCommandQueue, cl_init_fSpectra, spectrumBuffer, 0, 0, Tempest::data.iNumMS2Bins*sizeof(cl_float), 0, NULL, Tempest::config.profile ? &memsetEvent : NULL);
         //Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to clear spectrum memory");
         if (err != 0) {
             //memory cap reached. Stop filling new buffers.
@@ -446,10 +429,10 @@ void Device::scoreCandidates(eObj *e) {
             spectrumBuffer = spectrum2buffer.begin()->second;
             spectrum2buffer.erase(spectrum2buffer.begin());
             spectrum2buffer[e->lIndex] = spectrumBuffer;
-            err = clEnqueueCopyBuffer(clCommandQueue, cl_init_fSpectra, spectrumBuffer, 0, 0, Tempest::tempest.iNumMS2Bins*sizeof(cl_float), 0, NULL, PROFILE ? &memsetEvent : NULL);
+            err = clEnqueueCopyBuffer(clCommandQueue, cl_init_fSpectra, spectrumBuffer, 0, 0, Tempest::data.iNumMS2Bins*sizeof(cl_float), 0, NULL, Tempest::config.profile ? &memsetEvent : NULL);
             Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to clear spectrum memory");
         }
-        if (PROFILE) {
+        if (Tempest::config.profile) {
             clFinish(clCommandQueue);
             clGetEventProfilingInfo(memsetEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
             clGetEventProfilingInfo(memsetEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
@@ -458,12 +441,12 @@ void Device::scoreCandidates(eObj *e) {
         }
         
         // build
-        err  = clSetKernelArg(__gpu_build, 0, sizeof(cl_mem), &spectrumBuffer);
-        err |= clSetKernelArg(__gpu_build, 2, sizeof(int), &(Tempest::host_iPeakCounts[e->lIndex]));
-        err |= clSetKernelArg(__gpu_build, 5, sizeof(long), &(Tempest::host_lPeakIndices[e->lIndex]));
-        err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_build, 1, NULL, &stGlobalDim, &(this->build_size), 0, NULL, PROFILE ? &buildEvent : NULL);
-        Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not build spectrum (gpu_build kernel)");
-        if (PROFILE) {
+        err  = clSetKernelArg(__cl_build, 0, sizeof(cl_mem), &spectrumBuffer);
+        err |= clSetKernelArg(__cl_build, 1, sizeof(int), &(Tempest::data.host_iPeakCounts[e->lIndex]));
+        err |= clSetKernelArg(__cl_build, 4, sizeof(long), &(Tempest::data.host_lPeakIndices[e->lIndex]));
+        err |= clEnqueueNDRangeKernel(clCommandQueue, __cl_build, 1, NULL, &stGlobalDim, &(this->build_size), 0, NULL, Tempest::config.profile ? &buildEvent : NULL);
+        Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not build spectrum (cl_build kernel)");
+        if (Tempest::config.profile) {
             clFinish(clCommandQueue);
             clGetEventProfilingInfo(buildEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
             clGetEventProfilingInfo(buildEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
@@ -475,12 +458,12 @@ void Device::scoreCandidates(eObj *e) {
         // transform
         if (Tempest::params.xcorrTransformWidth) {
             //size_t localDim = CROSS_CORRELATION_WINDOW * 2;
-            //size_t globalDim = localDim * Tempest::tempest.iNumMS2Bins;
-            size_t globalDim = Tempest::mround(Tempest::tempest.iNumMS2Bins, this->transform_size);
-            err  = clSetKernelArg(__gpu_transform, 0, sizeof(cl_mem), &spectrumBuffer);
-            err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_transform, 1, NULL, &globalDim, &(this->transform_size), 0, NULL, PROFILE ? & transformEvent : NULL);
-            Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not transform spectrum (gpu_transform kernel)");
-            if (PROFILE) {
+            //size_t globalDim = localDim * Tempest::data.iNumMS2Bins;
+            size_t globalDim = Tempest::mround(Tempest::data.iNumMS2Bins, this->transform_size);
+            err  = clSetKernelArg(__cl_transform, 0, sizeof(cl_mem), &spectrumBuffer);
+            err |= clEnqueueNDRangeKernel(clCommandQueue, __cl_transform, 1, NULL, &globalDim, &(this->transform_size), 0, NULL, Tempest::config.profile ? & transformEvent : NULL);
+            Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not transform spectrum (cl_transform kernel)");
+            if (Tempest::config.profile) {
                 clFinish(clCommandQueue);
                 clGetEventProfilingInfo(transformEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
                 clGetEventProfilingInfo(transformEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
@@ -497,13 +480,13 @@ void Device::scoreCandidates(eObj *e) {
     }
         
     // score
-    err  = clSetKernelArg(__gpu_score, 0, sizeof(int), &(e->iPrecursorCharge));
-    err |= clSetKernelArg(__gpu_score, 1, sizeof(int), &(e->iNumBufferedCandidates));
-    err |= clSetKernelArg(__gpu_score, 4, sizeof(cl_mem), &spectrumBuffer);
-    err |= clSetKernelArg(__gpu_score, 5, sizeof(long), &lNoOffset);
-    err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_score, 1, NULL, &(this->candidateBufferSize), &(this->score_size), 0, NULL, PROFILE ? &scoreEvent : NULL);
-    Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not score candidates (gpu_score kernel)");
-    if (PROFILE) {
+    err  = clSetKernelArg(__cl_score, 0, sizeof(int), &(e->iPrecursorCharge));
+    err |= clSetKernelArg(__cl_score, 1, sizeof(int), &(e->iNumBufferedCandidates));
+    err |= clSetKernelArg(__cl_score, 4, sizeof(cl_mem), &spectrumBuffer);
+    err |= clSetKernelArg(__cl_score, 5, sizeof(long), &lNoOffset);
+    err |= clEnqueueNDRangeKernel(clCommandQueue, __cl_score, 1, NULL, &(this->candidateBufferSize), &(this->score_size), 0, NULL, Tempest::config.profile ? &scoreEvent : NULL);
+    Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not score candidates (cl_score kernel)");
+    if (Tempest::config.profile) {
         clFinish(clCommandQueue);
         clGetEventProfilingInfo(scoreEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
         clGetEventProfilingInfo(scoreEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
@@ -516,21 +499,19 @@ void Device::scoreCandidates(eObj *e) {
 	
     // TODO what if buffer size is less than 512?
     long lPSMsOffset = e->lIndex * Tempest::params.numInternalPSMs;
-    err |= clSetKernelArg(__gpu_score_reduction, 4, sizeof(long), &lPSMsOffset);
-    err |= clSetKernelArg(__gpu_score_reduction, 5, sizeof(long), &(e->lIndex));
-    err |= clEnqueueNDRangeKernel(clCommandQueue, __gpu_score_reduction, 1, NULL, &(this->score_reduction_size), &(this->score_reduction_size), 0, NULL, PROFILE ? &reduceEvent : NULL);
-    //err |= clEnqueueTask(clCommandQueue, __gpu_score_reduction, 0, NULL, PROFILE ? &reduceEvent : NULL);
-    Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not process scores (gpu_score_reduction kernel)");
-    if (PROFILE) {
+    err |= clSetKernelArg(__cl_reduce_scores, 4, sizeof(long), &lPSMsOffset);
+    if (Tempest::config.parallelReduce)
+        err |= clEnqueueNDRangeKernel(clCommandQueue, __cl_reduce_scores, 1, NULL, &(this->reduce_scores_size), &(this->reduce_scores_size), 0, NULL, Tempest::config.profile ? &reduceEvent : NULL);
+    else
+        err |= clEnqueueTask(clCommandQueue, __cl_reduce_scores, 0, NULL, Tempest::config.profile ? &reduceEvent : NULL);
+    Tempest::check_cl_error(__FILE__, __LINE__, err, "Could not process scores (cl_reduce_scores kernel)");
+    if (Tempest::config.profile) {
         clFinish(clCommandQueue);
         clGetEventProfilingInfo(reduceEvent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
         clGetEventProfilingInfo(reduceEvent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
         totalReduceTime += (end-start);
         clReleaseEvent(reduceEvent);
     }
-	
-    // Stats
-    Tempest::gpu_info.iNumScoringKernels += 1;
 
     // reset buffer
     e->iNumBufferedCandidates = 0;
@@ -541,9 +522,9 @@ void Device::finish() {
 }
 
 int Device::get_mPSMs(mObj* destination) {
-    mObj* temp_mPSMs = (mObj*)malloc(sizeof(mObj)*Tempest::tempest.iNumSpectra*Tempest::params.numInternalPSMs);
+    mObj* temp_mPSMs = (mObj*)malloc(sizeof(mObj)*Tempest::data.iNumSpectra*Tempest::params.numInternalPSMs);
     int err;
-    err = clEnqueueReadBuffer(clCommandQueue, cl_mPSMs, CL_TRUE, 0, sizeof(mObj)*Tempest::tempest.iNumSpectra*Tempest::params.numInternalPSMs, temp_mPSMs, 0, NULL, NULL);
+    err = clEnqueueReadBuffer(clCommandQueue, cl_mPSMs, CL_TRUE, 0, sizeof(mObj)*Tempest::data.iNumSpectra*Tempest::params.numInternalPSMs, temp_mPSMs, 0, NULL, NULL);
     if (err != 0)
         return err;
     //read interleaved results from this device (possibility of multiple devices)
@@ -551,18 +532,19 @@ int Device::get_mPSMs(mObj* destination) {
         for (int j=0; j<Tempest::params.numInternalPSMs; j++)
             destination[i*Tempest::params.numInternalPSMs + j] = temp_mPSMs[i*Tempest::params.numInternalPSMs + j];
     free(temp_mPSMs);
-    return err;       
+    return err;
 }
 
 // int Device::get_fNextScores(float* destination) {
-//     return clEnqueueReadBuffer(clCommandQueue, cl_fNextScores, CL_TRUE, 0, sizeof(float)*Tempest::tempest.iNumSpectra, destination, 0, NULL, NULL);
+//     return clEnqueueReadBuffer(clCommandQueue, cl_fNextScores, CL_TRUE, 0, sizeof(float)*Tempest::data.iNumSpectra, destination, 0, NULL, NULL);
 // }
 
 void Device::printProfilingData() {
+    printf("(%d:%d)\n", this->platformID, this->deviceID);
     printf("Total memset time:       %fs\n", (float)totalMemsetTime/1000000000);
     printf("Total build time:        %fs\n", (float)totalBuildTime/1000000000);
     printf("Total transform time:    %fs\n", (float)totalTransformTime/1000000000);
-    printf("Total send time:         %fs\n", (float)totalSendTime/1000000000);
+    //printf("Total send time:         %fs\n", (float)totalSendTime/1000000000);
     printf("Total score time:        %fs\n", (float)totalScoreTime/1000000000);
     printf("Total reduce time:       %fs\n", (float)totalReduceTime/1000000000);
     printf("Build launches:          %ld\n", buildLaunches);

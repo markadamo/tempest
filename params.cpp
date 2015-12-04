@@ -28,10 +28,30 @@ extern void Tempest::parse_params() {
         if (sParam[0] == '#') continue;
 
         if (strcmp(sParam, "digest_definition") == 0) {
-            Tempest::params.sDigestSites = (char*) malloc(26*sizeof(char));
-            Tempest::params.sDigestNoSites = (char*) malloc(26*sizeof(char));
             if (sscanf(sLine, "digest_definition %s %s %d \n", Tempest::params.sDigestSites, Tempest::params.sDigestNoSites, &Tempest::params.iDigestOffset) != 3) {
-                fprintf(stderr, "\nERROR: Could not parse digest definition\n\t>%s", sLine);
+                fprintf(stderr, "\nERROR: Could not parse digest definition:\n\t>%s", sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
+            for (unsigned int i=0; i<strlen(Tempest::params.sDigestSites); i++) {
+                if (Tempest::params.sDigestSites[i] == '-')
+                    continue;
+                else if (!isupper(Tempest::params.sDigestSites[i])) {
+                    fprintf(stderr, "\nERROR: Invalid amino acid symbol in digest definition:\n\t>%s", sLine);
+                    Tempest::tempest_exit(EXIT_FAILURE);
+                }
+                Tempest::params.bDigestSites[Tempest::params.sDigestSites[i]] = 1;
+            }
+            for (unsigned int i=0; i<strlen(Tempest::params.sDigestNoSites); i++) {
+                if (Tempest::params.sDigestNoSites[i] == '-')
+                    continue;
+                else if (!isupper(Tempest::params.sDigestNoSites[i])) {
+                    fprintf(stderr, "\nERROR: Invalid amino acid symbol in digest definition:\n\t>%s", sLine);
+                    Tempest::tempest_exit(EXIT_FAILURE);
+                }
+                Tempest::params.bDigestNoSites[Tempest::params.sDigestNoSites[i]] = 1;
+            }
+            if (Tempest::params.iDigestOffset != 0 && Tempest::params.iDigestOffset != 1) {
+                fprintf(stderr, "\nERROR: Invalid digest offset: %d\n\t>%s", Tempest::params.iDigestOffset, sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
         }
@@ -125,7 +145,7 @@ extern void Tempest::parse_params() {
                         Tempest::tempest_exit(EXIT_FAILURE);
                     }
                     for (int offset=0; ('Z'+offset)<256; offset+=32) {
-                        Tempest::dMassAA[*c+offset] += dMassDiff;
+                        Tempest::params.dMassAA[*c+offset] += dMassDiff;
                     }
                     append_mod(*c, -1, dMassDiff, '\0');
                 }
@@ -151,23 +171,23 @@ extern void Tempest::parse_params() {
 
             //validate location and update masses/symbols
             if (strcmp(sLocation, "nterm") == 0 || strcmp(sLocation, "peptide-nterm") == 0) {
-                if (Tempest::numNtermModSites >= 5) {
+                if (Tempest::params.numNtermModSites >= 5) {
                     fprintf(stderr, "\nERROR: Too many mods specified for N-terminus (max 5)\n");
                     Tempest::tempest_exit(EXIT_FAILURE);
                 }
-                Tempest::ntermModMasses[Tempest::numNtermModSites] = dMassDiff;
-                Tempest::ntermModSymbols[Tempest::numNtermModSites] = cSymbol;
-                Tempest::numNtermModSites += 1;
+                Tempest::params.ntermModMasses[Tempest::params.numNtermModSites] = dMassDiff;
+                Tempest::params.ntermModSymbols[Tempest::params.numNtermModSites] = cSymbol;
+                Tempest::params.numNtermModSites += 1;
                 
             }
             else if (strcmp(sLocation, "cterm") == 0 || strcmp(sLocation, "peptide-cterm") == 0) {
-                if (Tempest::numCtermModSites >= 5) {
+                if (Tempest::params.numCtermModSites >= 5) {
                     fprintf(stderr, "\nERROR: Too many mods specified for C-terminus (max 5)\n");
                     Tempest::tempest_exit(EXIT_FAILURE);
                 }
-                Tempest::ctermModMasses[Tempest::numCtermModSites] = dMassDiff;
-                Tempest::ctermModSymbols[Tempest::numCtermModSites] = cSymbol;
-                Tempest::numCtermModSites += 1;
+                Tempest::params.ctermModMasses[Tempest::params.numCtermModSites] = dMassDiff;
+                Tempest::params.ctermModSymbols[Tempest::params.numCtermModSites] = cSymbol;
+                Tempest::params.numCtermModSites += 1;
             }
             else {
                 for (c=sLocation; *c; c++) {
@@ -176,17 +196,17 @@ extern void Tempest::parse_params() {
                         Tempest::tempest_exit(EXIT_FAILURE);
                     }
 
-                    if (Tempest::numAAModSites[*c] >= 5) {
+                    if (Tempest::params.numAAModSites[*c] >= 5) {
                         fprintf(stderr, "\nERROR: Too many mods specified for %c (max 5)\n", *c);
                         Tempest::tempest_exit(EXIT_FAILURE);
                     }
 
-                    int modInd = Tempest::numAAModSites[*c];
-                    Tempest::cModSites[*c][modInd] = cSymbol;
-                    Tempest::fModValues[*c][modInd] = dMassDiff;
-                    Tempest::dMassAA[Tempest::toMod(*c, modInd+1)] += dMassDiff;
+                    int modInd = Tempest::params.numAAModSites[*c];
+                    Tempest::params.cModSites[*c][modInd] = cSymbol;
+                    Tempest::params.fModValues[*c][modInd] = dMassDiff;
+                    Tempest::params.dMassAA[Tempest::toMod(*c, modInd+1)] += dMassDiff;
                     append_mod(*c, modInd, dMassDiff, cSymbol);
-                    Tempest::numAAModSites[*c] += 1;
+                    Tempest::params.numAAModSites[*c] += 1;
                 }
             }
         }
@@ -241,7 +261,7 @@ extern void Tempest::parse_params() {
                 nlv.massDelta = (float)dMassDiff;
                 nlv.weighting = (float)dWeighting;
                 nlv.modNum = 0;
-                Tempest::nlValuesNterm.push_back(nlv);
+                Tempest::params.nlValuesNterm.push_back(nlv);
             }
             else if (strcmp(sLocation, "cterm") == 0 || strcmp(sLocation, "peptide-cterm") == 0) {
                 Tempest::params.numCtermNL += 1;
@@ -249,7 +269,7 @@ extern void Tempest::parse_params() {
                 nlv.massDelta = (float)dMassDiff;
                 nlv.weighting = (float)dWeighting;
                 nlv.modNum = 0;
-                Tempest::nlValuesCterm.push_back(nlv);
+                Tempest::params.nlValuesCterm.push_back(nlv);
             }
             else {
                 bool hasAA[256] = {0};
@@ -258,25 +278,25 @@ extern void Tempest::parse_params() {
                     if (!isalnum(*c)) {
                         bool matchedMod;
                         //MEA: cases exclusive?
-                        for (int i=0; i<Tempest::numNtermModSites; i++) {
-                            if (*c == Tempest::ntermModSymbols[i]) {
+                        for (int i=0; i<Tempest::params.numNtermModSites; i++) {
+                            if (*c == Tempest::params.ntermModSymbols[i]) {
                                 Tempest::params.numNtermNL += 1;
                                 nlValue nlv;
                                 nlv.massDelta = (float)dMassDiff;
                                 nlv.weighting = (float)dWeighting;
                                 nlv.modNum = i+1;
-                                Tempest::nlValuesNterm.push_back(nlv);
+                                Tempest::params.nlValuesNterm.push_back(nlv);
                                 matchedMod = true;
                             }
                         }
-                        for (int i=0; i<Tempest::numCtermModSites; i++) {
-                            if (*c == Tempest::ctermModSymbols[i]) {
+                        for (int i=0; i<Tempest::params.numCtermModSites; i++) {
+                            if (*c == Tempest::params.ctermModSymbols[i]) {
                                 Tempest::params.numCtermNL += 1;
                                 nlValue nlv;
                                 nlv.massDelta = (float)dMassDiff;
                                 nlv.weighting = (float)dWeighting;
                                 nlv.modNum = i+1;
-                                Tempest::nlValuesCterm.push_back(nlv);
+                                Tempest::params.nlValuesCterm.push_back(nlv);
                                 matchedMod = true;
                             }
                         }
@@ -308,7 +328,7 @@ extern void Tempest::parse_params() {
                     nlv.massDelta = dMassDiff;
                     nlv.weighting = dWeighting;
                     memcpy(nlv.hasAA, hasAA, 256*sizeof(bool));
-                    Tempest::nlValuesAA.push_back(nlv);
+                    Tempest::params.nlValuesAA.push_back(nlv);
                 }
             }
         }

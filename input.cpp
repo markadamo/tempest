@@ -90,9 +90,8 @@ extern void Tempest::parse_input(int argc, char **argv)
     fclose(fp);
 
     // Out file
-    if (!(Tempest::args.sOut || sscanf(Tempest::args.sSpectra, "%s.mzXML", Tempest::args.sOut) == 1 || sscanf(Tempest::args.sSpectra, "%s.mzxml", Tempest::args.sOut) == 1)) {
-        strcpy(Tempest::args.sOut, Tempest::args.sSpectra);
-    }
+    if (!Tempest::args.sOut)
+        Tempest::args.sOut = strdup_s(Tempest::args.sSpectra);
 }
 
 /*

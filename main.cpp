@@ -11,7 +11,6 @@ cl_context clContextl;
 
 int main(int argc, char **argv) 
 {
-    printf("%ld\n", sizeof(cObj));
     Tempest::initialize_globals();
     
     Tempest::parse_input(argc,argv);
@@ -28,7 +27,7 @@ int main(int argc, char **argv)
     Tempest::collect_msms_spectra();
     
     for (int i=0; i<Tempest::config.iDevices.size(); i++)
-        Tempest::devices[i]->setup(0, Tempest::eScans.size());
+        Tempest::devices[i]->setup(0, Tempest::data.eScans.size());
     
     Tempest::search_fasta_database();
     
@@ -40,7 +39,7 @@ int main(int argc, char **argv)
     
     Tempest::write_log();
 
-    if (PROFILE) {
+    if (Tempest::config.profile) {
         for (int i=0; i<Tempest::devices.size(); i++)
             Tempest::devices[i]->printProfilingData();
     }
