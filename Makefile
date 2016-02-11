@@ -3,8 +3,8 @@ override CFLAGS=-g -O3 #-fsanitize=address
 SOURCES=$(wildcard *.cpp)
 #OBJECTS=$(SOURCES:.c=.o)
 MSTOOLKIT=MSToolkit
-INC_DIRS=MSToolkit/include #clheaders
-LIB_DIRS=$(MSTOOLKIT) #clheaders
+INC_DIRS=MSToolkit/include
+LIB_DIRS=$(MSTOOLKIT)
 LIBS=-lmstoolkitlite #-lasan
 EXECUTABLE=tempest
 
@@ -45,7 +45,7 @@ ifdef AMDAPPSDKROOT
 else
 
 # Check for Linux-Nvidia
-ifdef CUDA	
+ifdef CUDA
 	INC_DIRS += $(CUDA)/include
 else
 	INC_DIRS += /usr/local/cuda/include
@@ -59,11 +59,6 @@ endif
 all:
 	cd MSToolkit; make; cd ..
 	$(CC) $(CFLAGS) $(SOURCES) $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS) -o $(EXECUTABLE)
-
-#$(PROJ): *.c
-#	$(CC) $(CFLAGS) -c $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS)
-#$(PROJ): *.o
-#	$(CC) $(CFLAGS) -o $@ $^ $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS)
 
 print-%:
 	@echo $* = $($*)

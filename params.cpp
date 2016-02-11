@@ -24,10 +24,53 @@ extern void Tempest::parse_params() {
     
     // read params line by line
     while (fgets(sLine, sizeof(sLine), fp)) {
+        //change > to null terminator to stop parsing line at comment symbol
+        for (int i=0; i<STRING_SIZE; i++) {
+            if (sLine[i] == '>')
+                sLine[i] = '\0';
+            if (sLine[i] == '\0')
+                break;
+        }
         if (sscanf(sLine, "%s", sParam) == -1) continue;
-        if (sParam[0] == '#') continue;
 
-        if (strcmp(sParam, "digest_definition") == 0) {
+        if (strcmp(sParam, "spectra_file") == 0) {
+            if (sscanf(sLine, "spectra_file %s \n", sTemp) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse spectra_file path:\n\t>%s", sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
+            Tempest::params.sSpectra = strdup_s(sTemp);
+        }
+        
+        else if (strcmp(sParam, "database_file") == 0) {
+            if (sscanf(sLine, "database_file %s \n", sTemp) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse database_file path:\n\t>%s", sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
+            Tempest::params.sFasta = strdup_s(sTemp);
+        }
+
+        else if (strcmp(sParam, "output_prefix") == 0) {
+            if (sscanf(sLine, "output_prefix %s \n", Tempest::params.sOut) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse output_prefix path:\n\t>%s", sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
+        }
+
+        else if (strcmp(sParam, "decoy_search") == 0) {
+            if (sscanf(sLine, "decoy_search %d \n", &iTemp) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse decoy_search flag\n\t>%s", sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
+            if (iTemp == 1) {
+                Tempest::params.decoySearch = 1;
+            }
+            else if (iTemp != 0) {
+                fprintf(stderr, "\nERROR: Invalid flag for decoy_search (expected 0 or 1): %d\n\t>%s", iTemp, sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
+        }
+
+        else if (strcmp(sParam, "digest_definition") == 0) {
             if (sscanf(sLine, "digest_definition %s %s %d \n", Tempest::params.sDigestSites, Tempest::params.sDigestNoSites, &Tempest::params.iDigestOffset) != 3) {
                 fprintf(stderr, "\nERROR: Could not parse digest definition:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
@@ -61,7 +104,6 @@ extern void Tempest::parse_params() {
                 fprintf(stderr, "\nERROR: Could not parse digest specificity\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
             if (Tempest::params.iDigestSpecificity < 0 || Tempest::params.iDigestSpecificity > 2) {
                 fprintf(stderr, "\nERROR: Invalid digest specificity: %d\n\t>%s", Tempest::params.iDigestSpecificity, sLine);
                 Tempest::tempest_exit(EXIT_FAILURE); 
@@ -73,7 +115,6 @@ extern void Tempest::parse_params() {
                 fprintf(stderr, "\nERROR: Could not parse max missed cleavages\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
             if (Tempest::params.iDigestMaxMissedCleavages < 0) {
                 fprintf(stderr, "\nERROR: Invalid max missed cleavages: %d\n\t>%s", Tempest::params.iDigestMaxMissedCleavages, sLine);
                 Tempest::tempest_exit(EXIT_FAILURE); 
@@ -107,12 +148,10 @@ extern void Tempest::parse_params() {
                 fprintf(stderr, "\nERROR: Could not parse digest_mass_range\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
             if (Tempest::params.minPeptideMass < 0 || Tempest::params.maxPeptideMass < 0) {
                 fprintf(stderr, "\nERROR: Negative value(s) in digest_mass_range:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE); 
             }
-
             if (Tempest::params.minPeptideMass > Tempest::params.maxPeptideMass) {
                 fprintf(stderr, "\nERROR: Min peptide mass greater than max peptide mass in digest_mass_range:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE); 
@@ -124,7 +163,6 @@ extern void Tempest::parse_params() {
                 fprintf(stderr, "\nERROR: Could not parse fixed modification\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
             //validate location and update masses
             if (strcmp(sLocation, "nterm") == 0 || strcmp(sLocation, "peptide-nterm") == 0) {
                 Tempest::params.dPeptideNtermMass = dMassDiff;
@@ -158,7 +196,6 @@ extern void Tempest::parse_params() {
                 fprintf(stderr, "\nERROR: Could not parse variable modification\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
             //validate symbol
             if (isalpha(cSymbol)) {
                 fprintf(stderr, "\nERROR: Invalid modification symbol: %c\n\t>%s", cSymbol, sLine);
@@ -170,23 +207,25 @@ extern void Tempest::parse_params() {
             }
 
             //validate location and update masses/symbols
-            if (strcmp(sLocation, "nterm") == 0 || strcmp(sLocation, "peptide-nterm") == 0) {
+            if (strcmp(sLocation, "nterm") == 0 || strcmp(sLocation, "peptide-nterm") == 0 || strcmp(sLocation, "protein-nterm") == 0) {
                 if (Tempest::params.numNtermModSites >= 5) {
                     fprintf(stderr, "\nERROR: Too many mods specified for N-terminus (max 5)\n");
                     Tempest::tempest_exit(EXIT_FAILURE);
                 }
                 Tempest::params.ntermModMasses[Tempest::params.numNtermModSites] = dMassDiff;
                 Tempest::params.ntermModSymbols[Tempest::params.numNtermModSites] = cSymbol;
+                Tempest::params.ntermModProtein[Tempest::params.numNtermModSites] = strcmp(sLocation, "protein-nterm") == 0;
                 Tempest::params.numNtermModSites += 1;
                 
             }
-            else if (strcmp(sLocation, "cterm") == 0 || strcmp(sLocation, "peptide-cterm") == 0) {
+            else if (strcmp(sLocation, "cterm") == 0 || strcmp(sLocation, "peptide-cterm") == 0 || strcmp(sLocation, "protein-cterm") == 0) {
                 if (Tempest::params.numCtermModSites >= 5) {
                     fprintf(stderr, "\nERROR: Too many mods specified for C-terminus (max 5)\n");
                     Tempest::tempest_exit(EXIT_FAILURE);
                 }
                 Tempest::params.ctermModMasses[Tempest::params.numCtermModSites] = dMassDiff;
                 Tempest::params.ctermModSymbols[Tempest::params.numCtermModSites] = cSymbol;
+                Tempest::params.ctermModProtein[Tempest::params.numCtermModSites] = strcmp(sLocation, "protein-cterm") == 0;
                 Tempest::params.numCtermModSites += 1;
             }
             else {
@@ -195,12 +234,10 @@ extern void Tempest::parse_params() {
                         fprintf(stderr, "\nERROR: Invalid modification location: %s\n\t>%s", sLocation, sLine);
                         Tempest::tempest_exit(EXIT_FAILURE);
                     }
-
                     if (Tempest::params.numAAModSites[*c] >= 5) {
                         fprintf(stderr, "\nERROR: Too many mods specified for %c (max 5)\n", *c);
                         Tempest::tempest_exit(EXIT_FAILURE);
                     }
-
                     int modInd = Tempest::params.numAAModSites[*c];
                     Tempest::params.cModSites[*c][modInd] = cSymbol;
                     Tempest::params.fModValues[*c][modInd] = dMassDiff;
@@ -333,71 +370,54 @@ extern void Tempest::parse_params() {
             }
         }
 
-        else if (strcmp(sParam, "use_a_ions") == 0) {
-            if (sscanf(sLine, "use_a_ions %d \n", &iTemp) != 1) {
-                fprintf(stderr, "\nERROR: Could not parse use_a_ions flag:\n\t>%s", sLine);
+        else if (strcmp(sParam, "a_ions") == 0) {
+            if (sscanf(sLine, "a_ions %f \n", &params.AIons) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse a_ions:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-            if (iTemp != 0 && iTemp != 1) {
-                fprintf(stderr, "\nERROR: Invalid flag for use_a_ions (expected 0 or 1):\n\t>%s", sLine);
-                Tempest::tempest_exit(EXIT_FAILURE);
-            }
-            Tempest::params.useAIons = iTemp;
         }
-        else if (strcmp(sParam, "use_b_ions") == 0) {
-            if (sscanf(sLine, "use_b_ions %d \n", &iTemp) != 1) {
-                fprintf(stderr, "\nERROR: Could not parse use_b_ions flag:\n\t>%s", sLine);
+        else if (strcmp(sParam, "b_ions") == 0) {
+            if (sscanf(sLine, "b_ions %f \n", &params.BIons) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse b_ions:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-            if (iTemp != 0 && iTemp != 1) {
-                fprintf(stderr, "\nERROR: Invalid flag for use_b_ions (expected 0 or 1):\n\t>%s", sLine);
-                Tempest::tempest_exit(EXIT_FAILURE);
-            }
-            Tempest::params.useBIons = iTemp;
         }
-        else if (strcmp(sParam, "use_c_ions") == 0) {
-            if (sscanf(sLine, "use_c_ions %d \n", &iTemp) != 1) {
-                fprintf(stderr, "\nERROR: Could not parse use_c_ions flag:\n\t>%s", sLine);
+        else if (strcmp(sParam, "c_ions") == 0) {
+            if (sscanf(sLine, "c_ions %f \n", &params.CIons) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse c_ions:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-            if (iTemp != 0 && iTemp != 1) {
-                fprintf(stderr, "\nERROR: Invalid flag for use_c_ions (expected 0 or 1):\n\t>%s", sLine);
-                Tempest::tempest_exit(EXIT_FAILURE);
-            }
-            Tempest::params.useCIons = iTemp;
         }
-        else if (strcmp(sParam, "use_x_ions") == 0) {
-            if (sscanf(sLine, "use_x_ions %d \n", &iTemp) != 1) {
-                fprintf(stderr, "\nERROR: Could not parse use_x_ions flag:\n\t>%s", sLine);
+        else if (strcmp(sParam, "x_ions") == 0) {
+            if (sscanf(sLine, "x_ions %f \n", &params.XIons) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse x_ions:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-            if (iTemp != 0 && iTemp != 1) {
-                fprintf(stderr, "\nERROR: Invalid flag for use_x_ions (expected 0 or 1):\n\t>%s", sLine);
-                Tempest::tempest_exit(EXIT_FAILURE);
-            }
-            Tempest::params.useXIons = iTemp;
         }
-        else if (strcmp(sParam, "use_y_ions") == 0) {
-            if (sscanf(sLine, "use_y_ions %d \n", &iTemp) != 1) {
-                fprintf(stderr, "\nERROR: Could not parse use_y_ions flag:\n\t>%s", sLine);
+        else if (strcmp(sParam, "y_ions") == 0) {
+            if (sscanf(sLine, "y_ions %f \n", &params.YIons) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse y_ions:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-            if (iTemp != 0 && iTemp != 1) {
-                fprintf(stderr, "\nERROR: Invalid flag for use_y_ions (expected 0 or 1):\n\t>%s", sLine);
-                Tempest::tempest_exit(EXIT_FAILURE);
-            }
-            Tempest::params.useYIons = iTemp;
         }
-        else if (strcmp(sParam, "use_z_ions") == 0) {
-            if (sscanf(sLine, "use_z_ions %d \n", &iTemp) != 1) {
-                fprintf(stderr, "\nERROR: Could not parse use_z_ions flag:\n\t>%s", sLine);
+        else if (strcmp(sParam, "z_ions") == 0) {
+            if (sscanf(sLine, "z_ions %f \n", &params.ZIons) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse z_ions:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-            if (iTemp != 0 && iTemp != 1) {
-                fprintf(stderr, "\nERROR: Invalid flag for use_z_ions (expected 0 or 1):\n\t>%s", sLine);
+        }
+
+        else if (strcmp(sParam, "ms_level") == 0) {
+            if (sscanf(sLine, "ms_level %d \n", &iTemp) != 1) {
+                fprintf(stderr, "\nERROR: Could not parse ms_level:\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-            Tempest::params.useZIons = iTemp;
+            if (iTemp == 1 || iTemp == 2 || iTemp == 3)
+                Tempest::params.msLevels.insert(iTemp);
+            else {
+                fprintf(stderr, "\nERROR: Invalid ms_level: %d\n\t>%s", iTemp, sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
         }
 
         else if (strcmp(sParam, "fragment_tolerance") == 0) {
@@ -457,13 +477,11 @@ extern void Tempest::parse_params() {
                 fprintf(stderr, "\nERROR: Could not allocate memory for %d remove M/Z ranges.\n", Tempest::params.iNumRemoveMzRanges);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
             fMzRange = Tempest::params.fRemoveMzRanges+2*(Tempest::params.iNumRemoveMzRanges-1);
             if (sscanf(sLine, "msms_remove_mz_range %f %f \n", fMzRange, fMzRange+1) != 2) {
                 fprintf(stderr, "\nERROR: Could not parse remove m/z range\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
             if (fMzRange[0] < 0.0f) {
                 fprintf(stderr, "\nERROR: Invalid remove m/z range (min cannot be less than 0):\n\t>%s", sLine);
                 Tempest::tempest_exit(EXIT_FAILURE); 
@@ -566,7 +584,32 @@ extern void Tempest::parse_params() {
             //Tempest::tempest_exit(EXIT_FAILURE);
         }
     }
+
+    //validate spectra file path (from args or params)
+    if (Tempest::args.sSpectra == NULL && Tempest::params.sSpectra == NULL) {
+        fprintf(stderr, "\nERROR\tNo spectra file given.\n");
+        Tempest::usage();
+        Tempest::tempest_exit(EXIT_FAILURE);
+    }
+    char* spectraFile = Tempest::args.sSpectra ? Tempest::args.sSpectra : Tempest::params.sSpectra;
+    if ((fp = (FILE *) fopen(spectraFile, "r")) == NULL) {
+        fprintf(stderr, "\nERROR: Unable to open spectra file %s: %s\n", spectraFile, strerror(errno));
+        Tempest::tempest_exit(EXIT_FAILURE);
+    }
+
+    //validate database file path (from args or params)
+    if (Tempest::args.sFasta == NULL && Tempest::params.sFasta == NULL) {
+        fprintf(stderr, "\nERROR: No fasta database given.\n");
+        Tempest::usage();
+        Tempest::tempest_exit(EXIT_FAILURE);
+    }
+    char* fastaFile = Tempest::args.sFasta ? Tempest::args.sFasta : Tempest::params.sFasta;
+    if ((fp = (FILE *) fopen(fastaFile, "r")) == NULL) {
+        fprintf(stderr, "\nERROR: Unable to open fasta database %s: %s\n", fastaFile, strerror(errno));
+        Tempest::tempest_exit(EXIT_FAILURE);
+    }
     
+    //silently correct input where numOutputPSMs > numInternalPSMs
     if (Tempest::params.numInternalPSMs < Tempest::params.numOutputPSMs)
         Tempest::params.numOutputPSMs = Tempest::params.numInternalPSMs;
         

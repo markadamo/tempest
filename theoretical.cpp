@@ -6,8 +6,9 @@
 int count_references(FILE*);
 void parse_reference(char*, char*);
 void digest_protein(int, int, char*);
-void gen_candidates(cObj, bool, bool, int*, int, int);
+void gen_candidates(cObj, bool, bool, bool, bool, int*, int, int);
 void store_candidate(cObj cCandidate);
+void write_to_buffer(eObj* e, cObj cCandidate);
 
 /*
  *  Parse fasta database.
@@ -28,7 +29,6 @@ extern void Tempest::search_fasta_database()
     float fProgress;
 
     // Setup
-
     // allocate working memory
     if (0 == (sProteinSequence = (char*) malloc(iProteinBuffer*sizeof(char)))) {
         fprintf(stderr, "\nERROR\tUnable to allocate memory for the active protein sequence.\n");
@@ -77,8 +77,10 @@ extern void Tempest::search_fasta_database()
     Tempest::data.dMaxPeptideMass = Tempest::data.fMaxPrecursorMass;
     
     // open fasta file
-    if (0 == (fp = (FILE *) fopen(Tempest::args.sFasta, "r"))) {
-        fprintf(stderr, "\nERROR\tUnable to open fasta database: %s\n", Tempest::args.sFasta);
+    // command line overrides param file
+    char* fastaFile = Tempest::args.sFasta == NULL ? Tempest::params.sFasta : Tempest::args.sFasta; 
+    if (0 == (fp = (FILE *) fopen(fastaFile, "r"))) {
+        fprintf(stderr, "\nERROR\tUnable to open fasta database: %s\n", fastaFile);
         Tempest::tempest_exit(EXIT_FAILURE);
     }
 
@@ -232,6 +234,10 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
 
         for (iEnd=iStart; iEnd < iLengthProtein; iEnd++) {
             unsigned char aa = sProteinSequence[iEnd];
+            if (aa < 'A' || aa > 'Z') {
+                fprintf(stderr, "\nERROR: Invalid amino acid symbol '%c' in protein sequence (ref=%s)\n", aa, &Tempest::data.sProteinReferences[iProtein * MAX_LENGTH_REFERENCE * sizeof(char)]);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
 
             iPeptideLength = iEnd - iStart + 1;
 
@@ -260,27 +266,29 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
             }
             
             // cleavage site?
-            bool isCleavageSite = false;
-            if (Tempest::params.iDigestOffset == 0)
-                isCleavageSite = (iEnd == iEndLength) || (Tempest::params.bDigestSites[sProteinSequence[iEnd+1]] && !Tempest::params.bDigestNoSites[aa]);
-            else
-                isCleavageSite = (iEnd == iEndLength) || (Tempest::params.bDigestSites[aa] && !Tempest::params.bDigestNoSites[sProteinSequence[iEnd+1]]);
+            if (Tempest::params.iDigestSpecificity > 0) {
+                bool isCleavageSite = false;
+                if (Tempest::params.iDigestOffset == 0)
+                    isCleavageSite = (iEnd == iEndLength) || (Tempest::params.bDigestSites[sProteinSequence[iEnd+1]] && !Tempest::params.bDigestNoSites[aa]);
+                else
+                    isCleavageSite = (iEnd == iEndLength) || (Tempest::params.bDigestSites[aa] && !Tempest::params.bDigestNoSites[sProteinSequence[iEnd+1]]);
                
-            if (isCleavageSite) {    
-                // set next iStart value
-                if (!iNextNterm) {
-                    iNextNterm = iEnd + 1;
-                }
+                if (isCleavageSite) {    
+                    // set next iStart value
+                    if (!iNextNterm) {
+                        iNextNterm = iEnd + 1;
+                    }
 
-                // too many missed cleavages?
-                if (iDigestSites > Tempest::params.iDigestMaxMissedCleavages) {
-                    break;
-                }
+                    // too many missed cleavages?
+                    if (iDigestSites > Tempest::params.iDigestMaxMissedCleavages) {
+                        break;
+                    }
 
-                iDigestSites++;
-            }
-            else if (Tempest::params.iDigestSpecificity == 2 || (Tempest::params.iDigestSpecificity == 1 && bNterm == 0)) {
-                continue;
+                    iDigestSites++;
+                }
+                else if (Tempest::params.iDigestSpecificity == 2 || (Tempest::params.iDigestSpecificity == 1 && bNterm == 0)) {
+                    continue;
+                }
             }
             
             // too short or too small?
@@ -298,6 +306,7 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
 
             cObj init_cCandidate;
             strncpy((char*)init_cCandidate.sPeptide, &sProteinSequence[iStart], (size_t)iPeptideLength);
+            init_cCandidate.decoy = 0;
             init_cCandidate.sPeptide[iPeptideLength] = '\0';
             init_cCandidate.ntermMod = 0;
             init_cCandidate.ctermMod = 0;
@@ -307,7 +316,7 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
             init_cCandidate.cBefore        = (iStart == 0)        ? '-' : sProteinSequence[iStart-1];
             init_cCandidate.cAfter         = (iEnd == iEndLength) ? '-' : sProteinSequence[iEnd+1];
 
-            gen_candidates(init_cCandidate, Tempest::params.numNtermModSites>0, Tempest::params.numCtermModSites>0, modInds, iNumAAModTargets, 0);
+            gen_candidates(init_cCandidate, Tempest::params.numNtermModSites>0, iStart==0, Tempest::params.numCtermModSites>0, iEnd==iEndLength, modInds, iNumAAModTargets, 0);
         }
 
         //find next n-terminal residue
@@ -376,7 +385,7 @@ void parse_reference(char* sLine, char* sReference) {
     sReference[iLengthRef] = '\0';
 }
 
-void gen_candidates(cObj cCandidate, bool ntermMod, bool ctermMod, int* modInds, int modIndsLeft, int modCount) {
+void gen_candidates(cObj cCandidate, bool ntermMod, bool proteinNterm, bool ctermMod, bool proteinCterm, int* modInds, int modIndsLeft, int modCount) {
     if (modCount >= Tempest::params.iModificationsMax)
         store_candidate(cCandidate);
     else if (modIndsLeft > 0) {
@@ -388,29 +397,35 @@ void gen_candidates(cObj cCandidate, bool ntermMod, bool ctermMod, int* modInds,
             new_cCandidate.sPeptide[modInd] = Tempest::toMod(aa, i+1);
             new_cCandidate.fPeptideMass += Tempest::params.fModValues[aa][i];
             //printf("%c[%d] = %f\n", aa, i, sPeptide[modInd], Tempest::fModValues[aa][i]);
-            gen_candidates(new_cCandidate, ntermMod, ctermMod, modInds+1, modIndsLeft-1, modCount+1);
+            gen_candidates(new_cCandidate, ntermMod, proteinNterm, ctermMod, proteinCterm, modInds+1, modIndsLeft-1, modCount+1);
         }
-        gen_candidates(cCandidate, ntermMod, ctermMod, modInds+1, modIndsLeft-1, modCount);
+        gen_candidates(cCandidate, ntermMod, proteinNterm, ctermMod, proteinCterm, modInds+1, modIndsLeft-1, modCount);
     }
     else if (ntermMod) {
-        cObj new_cCandidate;
+        //cObj new_cCandidate;
         for (int i=0; i<Tempest::params.numNtermModSites; i++) {
-            memcpy(&new_cCandidate, &cCandidate, sizeof(cObj));
+            if (!proteinNterm && Tempest::params.ntermModProtein[i])
+                continue;
+            //memcpy(&new_cCandidate, &cCandidate, sizeof(cObj));
+            cObj new_cCandidate = cCandidate;
             new_cCandidate.ntermMod = i+1;
             new_cCandidate.fPeptideMass += Tempest::params.ntermModMasses[i];
-            gen_candidates(new_cCandidate, 0, ctermMod, modInds, modIndsLeft, modCount+1);
+            gen_candidates(new_cCandidate, 0, proteinNterm, ctermMod, proteinCterm, modInds, modIndsLeft, modCount+1);
         }
-        gen_candidates(cCandidate, 0, ctermMod, modInds, modIndsLeft, modCount);
+        gen_candidates(cCandidate, 0, proteinNterm, ctermMod, proteinCterm, modInds, modIndsLeft, modCount);
     }
     else if (ctermMod) {
-        cObj new_cCandidate;
+        //cObj new_cCandidate;
         for (int i=0; i<Tempest::params.numCtermModSites; i++) {
-            memcpy(&new_cCandidate, &cCandidate, sizeof(cObj));
+            if (!proteinCterm && Tempest::params.ctermModProtein[i])
+                continue;
+            //memcpy(&new_cCandidate, &cCandidate, sizeof(cObj));
+            cObj new_cCandidate = cCandidate;
             new_cCandidate.ctermMod = i+1;
             new_cCandidate.fPeptideMass += Tempest::params.ctermModMasses[i];  
-            gen_candidates(new_cCandidate, ntermMod, 0, modInds, modIndsLeft, modCount+1);
+            gen_candidates(new_cCandidate, ntermMod, proteinNterm, 0, proteinCterm, modInds, modIndsLeft, modCount+1);
         }
-        gen_candidates(cCandidate, ntermMod, 0, modInds, modIndsLeft, modCount);
+        gen_candidates(cCandidate, ntermMod, proteinNterm, 0, proteinCterm, modInds, modIndsLeft, modCount);
     }
     else 
         store_candidate(cCandidate);
@@ -432,31 +447,50 @@ void store_candidate(cObj cCandidate) {
                 if (fabs(fModMass - (float) e->dPrecursorMass) > Tempest::params.fPrecursorTolerance)
                     continue;
             }
-                  
-            Tempest::data.lNumPSMs += 1;
-            if (e->iNumBufferedCandidates == 0) {
-                clWaitForEvents(1, &(e->clEventSent));
-                /*
-                if (PROFILE) {
-                    cl_ulong start;
-                    cl_ulong end;
-                    int err;
-                    err = clGetEventProfilingInfo(e->clEventSent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-                    err |= clGetEventProfilingInfo(e->clEventSent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
-                    if (err == 0)
-                        totalSendTime += (end-start);
-                }
-                */
-                clReleaseEvent(e->clEventSent);
-            }
-            e->candidateBuffer[e->iNumBufferedCandidates] = cCandidate;
-            //memcpy(e->candidateBuffer+e->iNumBufferedCandidates, &cCandidate, sizeof(cObj));
-            e->iNumCandidates++;
-            e->iNumBufferedCandidates++;
-            if (e->iNumBufferedCandidates == e->candidateBufferSize) {
-                //printf("%d\t%d\n", gpu_info.iNumScoringKernels, iBin);
-                e->device->scoreCandidates(e);
+
+            write_to_buffer(e, cCandidate);
+
+            if (Tempest::params.decoySearch) {
+                cObj decoyCandidate = cCandidate;
+                decoyCandidate.decoy = 1;
+                //reverse sequence while keeping enzymatic cleavage sites fixed
+                int start = 0;
+                int end = cCandidate.iPeptideLength-1;
+                if (Tempest::params.iDigestSpecificity > 0)
+                    if (Tempest::params.iDigestOffset == 0 && cCandidate.cBefore != '-' && Tempest::params.bDigestSites[cCandidate.sPeptide[start]])
+                        start++;
+                    else if (Tempest::params.iDigestOffset == 1 && cCandidate.cAfter != '-' && Tempest::params.bDigestSites[cCandidate.sPeptide[end]])
+                        end--;
+                for (; end>=0; start++, end--)
+                    decoyCandidate.sPeptide[start] = cCandidate.sPeptide[end];
+
+                write_to_buffer(e, decoyCandidate);
             }
         }
+    }
+}
+
+void write_to_buffer(eObj* e, cObj cCandidate) {
+    Tempest::data.lNumPSMs += 1;
+    if (e->iNumBufferedCandidates == 0) {
+        clWaitForEvents(1, &(e->clEventSent));
+        if (Tempest::config.profile) {
+          cl_ulong start;
+          cl_ulong end;
+          int err;
+          err = clGetEventProfilingInfo(e->clEventSent, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+          err |= clGetEventProfilingInfo(e->clEventSent, CL_PROFILING_COMMAND_END,   sizeof(cl_ulong), &end,   NULL);
+          if (err == 0)
+          e->device->totalSendTime += (end-start);
+          }
+        clReleaseEvent(e->clEventSent);
+    }
+    e->candidateBuffer[e->iNumBufferedCandidates] = cCandidate;
+    //memcpy(e->candidateBuffer+e->iNumBufferedCandidates, &cCandidate, sizeof(cObj));
+    e->iNumCandidates++;
+    e->iNumBufferedCandidates++;
+    if (e->iNumBufferedCandidates == e->candidateBufferSize) {
+        //printf("%d\t%d\n", gpu_info.iNumScoringKernels, iBin);
+        e->device->scoreCandidates(e);
     }
 }

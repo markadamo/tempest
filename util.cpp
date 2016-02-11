@@ -166,28 +166,7 @@ extern char* Tempest::strdup_s(char* s) {
     return d;
 }
 
-/*
- * Calculates combinations (binomial coefficient)
- */
-
-extern int Tempest::n_choose_k(int n, int k)
-{
-    int i, c;
-    
-    if (k > n-k) k = n-k;
-    for (i=0, c=1; i<k; i++) {
-        c = c * (n-i);
-        c = c / (i+1);
-    }
-
-    return c;
-}
-
 #ifdef _WIN32
-
-/*
- * roundf - based on http://forums.belution.com/en/cpp/000/050/13.shtml 
- */
 
 extern float Tempest::roundf(float value)
 {
@@ -197,67 +176,9 @@ extern float Tempest::roundf(float value)
 
 #endif
 
-/*
- * Round up to nearest multiple (useful for global/local work dimensions)
- */
-
+//Round up to nearest multiple (useful for global/local work dimensions)
 extern long Tempest::mround(long num, int multiple) {
     return num < multiple ? multiple : ((num + multiple - 1) / multiple) * multiple;
-}
-
-/*
- * convert to string binary
- */
-    
-extern const char* Tempest::byte_to_binary(unsigned int x)
-{
-    static char b[17];
-    unsigned int z;
-    b[0] = '\0';
-    
-    for (z = 32768; z > 0; z >>= 1) {
-        strcat(b, ((x & z) == z) ? "1" : "0");
-    }
-
-    return b;
-}
-
-/*
- * Count set bits ("Hamming Weight")
- */
-
-/*extern int count_set_bits(unsigned int v) {
-  v = v - ((v >> 1) & 0x55555555);                         // reuse input as temporary
-  v = (v & 0x33333333) + ((v >> 2) & 0x33333333);          // temp
-  return ((v + ((v >> 4) & 0xF0F0F0F)) * 0x1010101) >> 24; // count
-  }*/
-
-extern int Tempest::count_set_bits(unsigned int v) {
-    unsigned int c;
-    for (c=0; v; c++) v &= v-1;
-    return c;
-}
-
-extern unsigned long Tempest::hash(char *s) {
-    unsigned long hash = 5381;
-    int c;
-
-    while ((c = *s)) {
-        hash = ((hash << 5) + hash) + c; // hash * 33 + c
-    }
-
-    return hash;
-}
-
-extern unsigned long Tempest::hashn(char *s, int n) {
-    unsigned long hash = 5381;
-    int i;
-
-    for (i=0; i<n; i++) {
-        hash = ((hash << 5) + hash) + s[i]; // hash * 33 + c
-    }
-
-    return hash;
 }
 
 extern unsigned char Tempest::toMod(char c, int modInd) {

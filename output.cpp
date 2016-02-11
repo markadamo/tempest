@@ -6,7 +6,7 @@
 #include <CL/cl.h>
 #endif
 
-#define header "scan,precursor mass,charge,candidates,rank,sequence,ref,occurrences,sequence_mass,ppm,xcorr,dcn,dcn_backbone\n"
+#define header "Scan,PrecursorMass,Charge,Candidates,Rank,Sequence,Ref,Decoy,Occurrences,SequenceMass,ppm,Score,DeltaScore,DeltaScore_backbone\n"
 
 char* standard_peptide(mObj);
 
@@ -52,7 +52,7 @@ extern void Tempest::write_psms()
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to transfer results from the device");
     
     // setup single output file
-    if (!Tempest::args.bSplitOutput) {
+    //if (!Tempest::args.bSplitOutput) {
         //filename
         strcpy(sOutfile, Tempest::args.sOut);
         strcat(sOutfile, ".csv\0");
@@ -69,7 +69,7 @@ extern void Tempest::write_psms()
 
         // header
         fprintf(fp,header);
-    }
+        //}
 
     // loop through MS/MS scans
     for (iBin=0;iBin<Tempest::data.iNumPrecursorBins;iBin++) {
@@ -78,29 +78,6 @@ extern void Tempest::write_psms()
             if (0 == e->iNumCandidates) {
                 fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
                 continue;
-            }
-
-            // open split output file
-            if (Tempest::args.bSplitOutput) {
-                //filename
-                if (!(sscanf(e->sName, "%s.dta", sOutfile) == 1)) {
-                    strcpy(sOutfile, Tempest::args.sOut);
-                    strcat(sOutfile, ".");
-                    strcat(sOutfile, e->sName);
-                }
-                
-                //extension
-                strcat(sOutfile,".csv\0");
-
-                //open
-                if (0 == (fp = (FILE *) fopen(sOutfile, "w"))) {
-                    fprintf(stderr, "\nERROR\tUnable to open %s (%s)\n", Tempest::args.sOut, strerror(errno));
-                    Tempest::tempest_exit(EXIT_FAILURE);
-                }
-
-                //header
-                fprintf(fp, header);
-
             }
             
             // write matches to file
@@ -127,6 +104,7 @@ extern void Tempest::write_psms()
                 fprintf(fp, "%d,", i+1);
                 fprintf(fp, "%c.%s.%c,", mScanPSMs[i].cBefore, standard_peptide(mScanPSMs[i]), mScanPSMs[i].cAfter);
                 fprintf(fp, "%s,", &Tempest::data.sProteinReferences[mScanPSMs[i].iProtein * MAX_LENGTH_REFERENCE]);
+                fprintf(fp, "%d,", mScanPSMs[i].decoy);
                 fprintf(fp, "%d,", mScanPSMs[i].iNumOccurrences);
                 fprintf(fp, "%.5f,", mScanPSMs[i].fPeptideMass);
                 fprintf(fp, "%.4f,", 1000000.0f * (e->dPrecursorMass - mScanPSMs[i].fPeptideMass) / mScanPSMs[i].fPeptideMass);
@@ -149,16 +127,7 @@ extern void Tempest::write_psms()
                     fprintf(fp, "%.4f", 1.0);
                 fprintf(fp, "\n");
             }
-
-            // close split output file
-            if (Tempest::args.bSplitOutput) fclose(fp);
         }
-    }
-    
-    // close single output file
-    if (!Tempest::args.bSplitOutput) {
-        if (Tempest::args.iPrintLevel) printf("done\n");
-        if (fp) fclose(fp);
     }
     
     // cleanup
@@ -166,11 +135,12 @@ extern void Tempest::write_psms()
     //free(fNextScores);
 }
 
-extern void Tempest::write_log()
+extern void Tempest::write_log(int argc, char** argv)
 {
     int i;
     char sOutfile[STRING_SIZE];
     char sDate[STRING_SIZE];
+    char sLine[STRING_SIZE];
     FILE *log;
     time_t tTime=0;
     struct tm *tDate;
@@ -188,7 +158,7 @@ extern void Tempest::write_log()
     //Tempest info
     fprintf(log, "Program: Tempest v%s\n", VERSION_STRING);
     fprintf(log, "Authors: %s\n", AUTHORS_STRING);
-    fprintf(log, "License: %s\n", LICENSE_STRING);
+    //fprintf(log, "License: %s\n", LICENSE_STRING);
     fprintf(log, "\n");
 
     //date
@@ -196,75 +166,68 @@ extern void Tempest::write_log()
     tDate  = localtime(&tTime);
     strftime(sDate, STRING_SIZE, "%D %T", tDate);
     fprintf(log, "Date: %s\n", sDate);
-
-    //params
-    fprintf(log, "Spectra:             %s\n", Tempest::args.sSpectra);
-    fprintf(log, "Fasta:               %s\n", Tempest::args.sFasta);
-    fprintf(log, "Digest Sites:        %s\n", Tempest::params.sDigestSites);
-    fprintf(log, "Non-Digest Sites:    %s\n", Tempest::params.sDigestNoSites);
-    fprintf(log, "Digest Offset:       %d\n", Tempest::params.iDigestOffset);
-    switch (Tempest::params.iDigestSpecificity) {
-    case 0: fprintf(log, "Digest Specificity:  None\n"); break;
-    case 1: fprintf(log, "Digest Specificity:  Partial\n"); break;
-    case 2: fprintf(log, "Digest Specificity:  Full\n"); break;
-    }
-    fprintf(log, "Missed Cleavages:    %d\n", Tempest::params.iDigestMaxMissedCleavages);
-    fprintf(log, "Digest Length:       %d-%d\n", Tempest::params.iMinPeptideLength, Tempest::params.iMaxPeptideLength);
-
-    for (i=0; i<Tempest::params.iNumMods; i++) {
-        if (!Tempest::params.tMods[i].cSymbol) {
-            fprintf(log, "Fixed Modification:  %c %.4f Da\n", Tempest::params.tMods[i].cAminoAcid, Tempest::params.tMods[i].dMassDiff);
-        }
-    }
-
-    if (Tempest::params.dPeptideNtermMass > 0.0) fprintf(log, "Fixed Modification:  peptide-nterm %f Da\n", Tempest::params.dPeptideNtermMass);
-    if (Tempest::params.dPeptideCtermMass > 0.0) fprintf(log, "Fixed Modification:  peptide-cterm %f Da\n", Tempest::params.dPeptideCtermMass);
-    if (Tempest::params.dProteinNtermMass > 0.0) fprintf(log, "Fixed Modification:  protein-nterm %f Da\n", Tempest::params.dProteinNtermMass);
-    if (Tempest::params.dProteinCtermMass > 0.0) fprintf(log, "Fixed Modification:  protein-cterm %f Da\n", Tempest::params.dProteinCtermMass);
-
-    for (i=0; i<Tempest::params.iNumMods; i++) {
-        if (Tempest::params.tMods[i].cSymbol) {
-            fprintf(log, "Modification:        %c%c %.4f Da\n", Tempest::params.tMods[i].cAminoAcid, Tempest::params.tMods[i].cSymbol, Tempest::params.tMods[i].dMassDiff);
-        }
-    }
-
-    for (i=0; i<Tempest::params.numNtermModSites; i++) {
-        fprintf(log, "Modification:        nterm %c %.4f Da\n", Tempest::params.ntermModSymbols[i], Tempest::params.ntermModMasses[i]);
-    }
-
-    for (i=0; i<Tempest::params.numCtermModSites; i++) {
-        fprintf(log, "Modification:        cterm %c %.4f Da\n", Tempest::params.ctermModSymbols[i], Tempest::params.ctermModMasses[i]);
-    }
-
-    fprintf(log, "Precursor Tolerance: %.4f %s\n", Tempest::params.fPrecursorTolerance, Tempest::params.bPrecursorTolerancePPM ? "ppm" : "Da");
-    fprintf(log, "Fragment Tolerance:  %.4f %s\n", Tempest::params.fFragmentTolerance, Tempest::params.bFragmentTolerancePPM ? "ppm" : "mz");
-    fprintf(log, "Remove Precursors:   %d\n", Tempest::params.bRemovePrecursors);
-
-    for (i=0; i<Tempest::params.iNumRemoveMzRanges; i++) {
-        fprintf(log, "Remove Peaks Range:  %.4f-%.4f m/z\n", Tempest::params.fRemoveMzRanges[2*i], Tempest::params.fRemoveMzRanges[2*i+1]);
-    }
-
-    fprintf(log, "xcorr_transform_window: %d\n", Tempest::params.xcorrTransformWidth);
-    fprintf(log, "flanking_intensity:     %f\n", Tempest::params.flankingIntensity);
-    fprintf(log, "num_internal_psms:      %d\n", Tempest::params.numInternalPSMs);
-    fprintf(log, "num_output_psms:        %d\n", Tempest::params.numOutputPSMs);
-    fprintf(log, "backbone_delta_score:   %d\n", Tempest::params.bFixDeltaScore);
-    fprintf(log, "\n");
-
-    
-    //fprintf(log, " Buffer:    %lu\n", Tempest::config.iCandidateBufferSize);
-    //fprintf(log, " Config:    %lu blocks x %lu threads per block\n", Tempest::config.iScoreNumBlocks, Tempest::config.iScoreBlockDim);
-        
-    fprintf(log, "\n");
+    fprintf(log, "\n");  
 
     //summary
     fprintf(log, "Spectra:  %d\n", Tempest::data.iNumSpectra);
-    fprintf(log, "Masses:   %.5f - %.5f Da\n", Tempest::data.fMinPrecursorMass, Tempest::data.fMaxPrecursorMass);
+    fprintf(log, "Masses:   %f - %f Da\n", Tempest::data.fMinPrecursorMass, Tempest::data.fMaxPrecursorMass);
     fprintf(log, "Proteins: %d\n", Tempest::data.iNumProteins);
     fprintf(log, "Peptides: %ld\n", Tempest::data.lNumPeptides);
     fprintf(log, "PSMs:     %ld\n", Tempest::data.lNumPSMs);
     fprintf(log, "Runtime:  %lus\n", (unsigned long int) tTime-Tempest::data.tStart);
+        //modifications
+    // fixed
+    fprintf(log, "Modifications:\n");
+    for (i=0; i<Tempest::params.iNumMods; i++) {
+        if (!Tempest::params.tMods[i].cSymbol) {
+            fprintf(log, "%c\t+ %f\t= %f Da\n", Tempest::params.tMods[i].cAminoAcid, Tempest::params.tMods[i].dMassDiff, Tempest::params.dMassAA[Tempest::params.tMods[i].cAminoAcid]+Tempest::params.tMods[i].dMassDiff );
+        }
+    }
+    if (Tempest::params.dPeptideNtermMass > 0.0) fprintf(log, "peptide-nterm\t+ %f Da\n", Tempest::params.dPeptideNtermMass);
+    if (Tempest::params.dPeptideCtermMass > 0.0) fprintf(log, "peptide-cterm\t+ %f Da\n", Tempest::params.dPeptideCtermMass);
+    if (Tempest::params.dProteinNtermMass > 0.0) fprintf(log, "protein-nterm\t+ %f Da\n", Tempest::params.dProteinNtermMass);
+    if (Tempest::params.dProteinCtermMass > 0.0) fprintf(log, "protein-cterm\t+ %f Da\n", Tempest::params.dProteinCtermMass);
+    // variable
+    for (i=0; i<Tempest::params.iNumMods; i++) {
+        if (Tempest::params.tMods[i].cSymbol) {
+            fprintf(log, "%c%c\t+ %f Da\n", Tempest::params.tMods[i].cAminoAcid, Tempest::params.tMods[i].cSymbol, Tempest::params.tMods[i].dMassDiff);
+        }
+    }
+    for (i=0; i<Tempest::params.numNtermModSites; i++) {
+        fprintf(log, "%s-nterm%c\t+ %f Da\n", Tempest::params.ntermModProtein[i] ? "protein" : "peptide", Tempest::params.ntermModSymbols[i], Tempest::params.ntermModMasses[i]);
+    }
+    for (i=0; i<Tempest::params.numCtermModSites; i++) {
+        fprintf(log, "%s-cterm%c\t+ %f Da\n", Tempest::params.ctermModProtein[i] ? "protein" : "peptide", Tempest::params.ctermModSymbols[i], Tempest::params.ctermModMasses[i]);
+    }
+    fprintf(log, "\n");
+    fprintf(log, "%s\n\n", std::string(80,'=').c_str());
+
+    //command line arguments
+    fprintf(log, "%s\n", std::string(80,'-').c_str());
+    fprintf(log, "Command line\n");
+    fprintf(log, "%s\n", std::string(80,'-').c_str());
+    for (int i=0; i<argc; i++)
+        fprintf(log, "%s ", argv[i]);
+    fprintf(log, "\n");
+    fprintf(log, "%s\n\n", std::string(80,'=').c_str());
     
+    //param file
+    fprintf(log, "%s\n", std::string(80,'-').c_str());
+    fprintf(log, "Paramfile: %s\n", Tempest::args.sParams);
+    fprintf(log, "%s\n", std::string(80,'-').c_str());
+    FILE* fp = (FILE*) fopen(Tempest::args.sParams, "r");
+    while (fgets(sLine, sizeof(sLine), fp))
+        fprintf(log, "%s", sLine);
+    fprintf(log, "%s\n\n", std::string(80,'=').c_str());
+
+    //config file
+    fprintf(log, "%s\n", std::string(80,'-').c_str());
+    fprintf(log, "Configfile: %s\n", Tempest::args.sConfig);
+    fprintf(log, "%s\n", std::string(80,'-').c_str());
+    fp = (FILE*) fopen(Tempest::args.sConfig, "r");
+    while (fgets(sLine, sizeof(sLine), fp))
+        fprintf(log, "%s", sLine);
+    fprintf(log, "%s\n\n", std::string(80,'=').c_str());   
 }
 
 char* standard_peptide(mObj psm) {
@@ -272,21 +235,30 @@ char* standard_peptide(mObj psm) {
     static unsigned char* c;
     static char *sModPeptide=0;
     
-    if (sModPeptide == 0) sModPeptide = (char*) malloc((MAX_PEPTIDE_LENGTH + Tempest::params.iModificationsMax + 1) * sizeof(char)); 
-    for (c=psm.sPeptide, i=0; *c; c++) {
+    //if (sModPeptide == 0) sModPeptide = (char*) malloc((MAX_PEPTIDE_LENGTH + Tempest::params.iModificationsMax + 1) * sizeof(char));
+    if (sModPeptide == 0) sModPeptide = (char*) malloc((MAX_PEPTIDE_LENGTH*2 + 2 + 6) * sizeof(char));
+
+    i=0;
+
+    //nterm mod symbol to the left of sequence
+    sModPeptide[i++] = 'n';
+    if (psm.ntermMod) {
+        sModPeptide[i++] = Tempest::params.ntermModSymbols[psm.ntermMod-1];
+    }
+    
+    for (c=psm.sPeptide; *c; c++) {
         if (isupper(*c)) {
             sModPeptide[i++] = *c;
         }
         else {
+            //AA mod symbol to the right of AA
             sModPeptide[i++] = Tempest::params.unModAA[*c];
             sModPeptide[i++] = Tempest::params.cModSites[Tempest::params.unModAA[*c]][Tempest::getModInd(*c)];
         }
-
-        if (c==psm.sPeptide && psm.ntermMod) {
-            sModPeptide[i++] = Tempest::params.ntermModSymbols[psm.ntermMod-1];
-        }
     }
 
+    //cterm mod symbol to the right of sequence
+    sModPeptide[i++] = 'c';
     if (psm.ctermMod) {
         sModPeptide[i++] = Tempest::params.ctermModSymbols[psm.ctermMod-1];
     }

@@ -9,16 +9,15 @@
 std::vector<Device*> Tempest::devices;
 cl_context clContextl;
 
-int main(int argc, char **argv) 
-{
+int main(int argc, char** argv) {
     Tempest::initialize_globals();
     
     Tempest::parse_input(argc,argv);
-    
+
     Tempest::parse_params();
-    
+
     Tempest::parse_config();
-    
+
     Tempest::setup_globals();
     
     for (int i=0; i<Tempest::config.iDevices.size(); i++)
@@ -37,7 +36,7 @@ int main(int argc, char **argv)
     
     Tempest::write_psms();
     
-    Tempest::write_log();
+    Tempest::write_log(argc, argv);
 
     if (Tempest::config.profile) {
         for (int i=0; i<Tempest::devices.size(); i++)
@@ -52,8 +51,7 @@ int main(int argc, char **argv)
  * Cleanup and Exit.
  */
 
-extern void Tempest::tempest_exit(int EXIT_FLAG)
-{
+extern void Tempest::tempest_exit(int EXIT_FLAG) {
     fflush(0);
     //cleanup_device();
     //cleanup_globals();

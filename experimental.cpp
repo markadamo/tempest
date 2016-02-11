@@ -28,15 +28,26 @@ extern void Tempest::collect_msms_spectra()
     MSToolkit::Spectrum s;
     int j;
 
-    r.setFilter(MSToolkit::MS2);
+    if (Tempest::params.msLevels.size() == 0)
+        r.setFilter(MSToolkit::MS2);
+    else {
+        for (std::set<int>::iterator it=Tempest::params.msLevels.begin(); it!=Tempest::params.msLevels.end(); ++it) {
+            MSToolkit::MSSpectrumType spectrumType = *it==1 ? MSToolkit::MS1 : *it==2 ? MSToolkit::MS2 : MSToolkit::MS3;
+            if (it == Tempest::params.msLevels.begin())
+                r.setFilter(spectrumType);
+            else
+                r.addFilter(spectrumType);
+        }
+    }
     
-	// open dta list
-	if (r.readFile(Tempest::args.sSpectra, s) != true) {
-		fprintf(stderr, "\nERROR\tUnable to open spectra data file %s: %s\n", Tempest::args.sSpectra, strerror(errno));
+    //open spectra file
+    char* spectraFile = Tempest::args.sSpectra ? Tempest::args.sSpectra : Tempest::params.sSpectra;
+	if (r.readFile(spectraFile, s) != true) {
+		fprintf(stderr, "\nERROR: Unable to open spectra file %s: %s\n", spectraFile, strerror(errno));
 		Tempest::tempest_exit(EXIT_FAILURE);
 	}
 	
-	// count dtas
+	// count scans
 	Tempest::data.iNumSpectra = 0;
     iScanNum = 0;
 	while ((iScanNum = s.getScanNumber()) > 0) {
@@ -45,7 +56,7 @@ extern void Tempest::collect_msms_spectra()
         r.readFile(NULL, s);
 	}
 
-	r.readFile(Tempest::args.sSpectra, s);
+	r.readFile(spectraFile, s);
 
 	if (Tempest::args.iPrintLevel) {
 		printf(" » Preparing %d MS/MS spectra...     ", Tempest::data.iNumSpectra);

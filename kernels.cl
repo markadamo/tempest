@@ -7,6 +7,7 @@ typedef struct cobject {
     int    iProtein;
     float  fPeptideMass;
 
+    char   decoy; // bool (for internal decoy_search)
     unsigned char iPeptideLength;
     char   ntermMod; //values from 0 to 5
     char   ctermMod; //values from 0 to 5
@@ -23,7 +24,8 @@ typedef struct mobject {
     float  fPeptideMass;
     float  fScore;
     int    iProtein;
-    
+
+    char   decoy; // bool (for internal decoy_search)
     char   ntermMod; //values from 0 to 5
     char   ctermMod; //values from 0 to 5
     char   cBefore;
@@ -59,22 +61,7 @@ __kernel void cl_build(__global float* fSpectrum, int iPeakCount, __global int* 
         iBin = iPeakBins[iThread];
         intensity = fPeakInts[iThread];
         fSpectrum[iBin] = intensity;
-    }
-
-    // if (FLANKING_INTENSITY) {
-    //     barrier(CLK_GLOBAL_MEM_FENCE);
-    //     if (iThread < iPeakCount) {
-    //         if (iBin > 0)
-    //             intensity += fSpectrum[iBin-1]*FLANKING_INTENSITY;
-    //         if (iBin < NUM_BINS-1)
-    //             intensity += fSpectrum[iBin+1]*FLANKING_INTENSITY;
-    //     }
-    //     barrier(CLK_GLOBAL_MEM_FENCE);
-
-    //     if (iThread < iPeakCount)
-    //         fSpectrum[iBin] = intensity;
-    // }
-    
+    }    
 }
 
 __kernel void cl_transform(__global float* fSpectrum, int NUM_BINS)
@@ -113,6 +100,7 @@ __kernel void cl_score(int iPrecursorCharge, int iNumCandidates, __global cObj* 
     float fScore = 0.0f;
 
 #if NUM_AA_NL
+    //if !NUM_AA_NL, these won't be declared and won't take up register space.
     int nNLTotal = 0;
     int cNLTotal = 0;
     int nNLCount[NUM_AA_NL];
@@ -139,8 +127,6 @@ __kernel void cl_score(int iPrecursorCharge, int iNumCandidates, __global cObj* 
     if (cCandidate.cBefore == '-') nTermFragMass += MASS_PROTEIN_NTERM;
     if (cCandidate.ntermMod) nTermFragMass += NTERM_MOD_MASSES[cCandidate.ntermMod-1];
 
-    //baseMass = cCandidate.fPeptideMass - PROTON_MASS;
-
     for (int iFragment=0; iFragment<cCandidate.iPeptideLength-1; iFragment++) {
         unsigned char aa = cCandidate.sPeptide[iFragment];
         //update phos mods
@@ -163,73 +149,73 @@ __kernel void cl_score(int iPrecursorCharge, int iNumCandidates, __global cObj* 
 
         for (int iCharge=1; iCharge<iPrecursorCharge; iCharge++) {
             
-            if (USE_A_IONS) {
+            if (A_IONS != 0) {
                 iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge - CO_MASS) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                 if (0 <= iBin && iBin < NUM_BINS)
-                    fScore += fSpectrum[iBin];
+                    fScore += fSpectrum[iBin] * A_IONS;
             }
-            if (USE_B_IONS) {
+            if (B_IONS != 0) {
                 iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                 if (0 <= iBin && iBin < NUM_BINS)
-                    fScore += fSpectrum[iBin];
+                    fScore += fSpectrum[iBin] * B_IONS;
             }
-            if (USE_C_IONS) {
+            if (C_IONS != 0) {
                 iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge + NH3_MASS) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                 if (0 <= iBin && iBin < NUM_BINS)
-                    fScore += fSpectrum[iBin];
+                    fScore += fSpectrum[iBin] * C_IONS;
             }
 
-            if (USE_X_IONS) {
+            if (X_IONS != 0) {
                 iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - H_MASS + CO_MASS) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                 if (0 <= iBin && iBin < NUM_BINS)
-                    fScore += fSpectrum[iBin];
+                    fScore += fSpectrum[iBin] * X_IONS;
             }
-            if (USE_Y_IONS) {
+            if (Y_IONS != 0) {
                 iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1)) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                 if (0 <= iBin && iBin < NUM_BINS)
-                    fScore += fSpectrum[iBin];
+                    fScore += fSpectrum[iBin] * Y_IONS;
             }
-            if (USE_Z_IONS) {
+            if (Z_IONS != 0) {
                 iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - NH3_MASS) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                 if (0 <= iBin && iBin < NUM_BINS)
-                    fScore += fSpectrum[iBin];
+                    fScore += fSpectrum[iBin] * Z_IONS;
             }
             
 #if NUM_AA_NL
             if (cNLTotal || nNLTotal){
                 for (int i=0; i<NUM_AA_NL; i++) {
                     if (nNLCount[i]) {
-                        if (USE_A_IONS) {
+                        if (A_IONS != 0) {
                             iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge - CO_MASS - nlValuesAA[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                             if (0 <= iBin && iBin < NUM_BINS)
-                                fScore += fSpectrum[iBin] * nlValuesAA[i].weighting;
+                                fScore += fSpectrum[iBin] * A_IONS * nlValuesAA[i].weighting;
                         }
-                        if (USE_B_IONS) {
+                        if (B_IONS != 0) {
                             iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge - nlValuesAA[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                             if (0 <= iBin && iBin < NUM_BINS)
-                                fScore += fSpectrum[iBin] * nlValuesAA[i].weighting;
+                                fScore += fSpectrum[iBin] * B_IONS * nlValuesAA[i].weighting;
                         }
-                        if (USE_C_IONS) {
+                        if (C_IONS != 0) {
                             iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge + NH3_MASS - nlValuesAA[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                             if (0 <= iBin && iBin < NUM_BINS)
-                                fScore += fSpectrum[iBin] * nlValuesAA[i].weighting;
+                                fScore += fSpectrum[iBin] * C_IONS * nlValuesAA[i].weighting;
                         }
                     }
                     if (cNLCount[i]) {
-                        if (USE_X_IONS) {
+                        if (X_IONS != 0) {
                             iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - H_MASS + CO_MASS - nlValuesAA[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                             if (0 <= iBin && iBin < NUM_BINS)
-                                fScore += fSpectrum[iBin] * nlValuesAA[i].weighting;
+                                fScore += fSpectrum[iBin] * X_IONS * nlValuesAA[i].weighting;
                         }
-                        if (USE_Y_IONS) {
+                        if (Y_IONS != 0) {
                             iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - nlValuesAA[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                             if (0 <= iBin && iBin < NUM_BINS)
-                                fScore += fSpectrum[iBin] * nlValuesAA[i].weighting;
+                                fScore += fSpectrum[iBin] * Y_IONS * nlValuesAA[i].weighting;
                         }
-                        if (USE_Z_IONS) {
+                        if (Z_IONS != 0) {
                             iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - NH3_MASS - nlValuesAA[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                             if (0 <= iBin && iBin < NUM_BINS)
-                                fScore += fSpectrum[iBin] * nlValuesAA[i].weighting;
+                                fScore += fSpectrum[iBin] * Z_IONS * nlValuesAA[i].weighting;
                         }
                     }
                 }
@@ -240,20 +226,20 @@ __kernel void cl_score(int iPrecursorCharge, int iNumCandidates, __global cObj* 
             for (int i=0; i<NUM_NTERM_NL; i++) {
                 if (nlValuesNterm[i].modNum != cCandidate.ntermMod)
                     continue;
-                if (USE_A_IONS) {
+                if (A_IONS != 0) {
                     iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge - CO_MASS - nlValuesNterm[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                     if (0 <= iBin && iBin < NUM_BINS)
-                        fScore += fSpectrum[iBin] * nlValuesNterm[i].weighting;
+                        fScore += fSpectrum[iBin] * A_IONS * nlValuesNterm[i].weighting;
                 }
-                if (USE_B_IONS) {
+                if (B_IONS != 0) {
                     iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge - nlValuesNterm[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                     if (0 <= iBin && iBin < NUM_BINS)
-                        fScore += fSpectrum[iBin] * nlValuesNterm[i].weighting;
+                        fScore += fSpectrum[iBin] * B_IONS * nlValuesNterm[i].weighting;
                 }
-                if (USE_C_IONS) {
+                if (C_IONS != 0) {
                     iBin = (int) ((nTermFragMass + PROTON_MASS*iCharge + NH3_MASS - nlValuesNterm[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                     if (0 <= iBin && iBin < NUM_BINS)
-                        fScore += fSpectrum[iBin] * nlValuesNterm[i].weighting;
+                        fScore += fSpectrum[iBin] * C_IONS * nlValuesNterm[i].weighting;
                 }
             }
 #endif
@@ -261,20 +247,20 @@ __kernel void cl_score(int iPrecursorCharge, int iNumCandidates, __global cObj* 
             for (int i=0; i<NUM_CTERM_NL; i++) {
                 if (nlValuesCterm[i].modNum != cCandidate.ctermMod)
                     continue;
-                if (USE_X_IONS) {
+                if (X_IONS != 0) {
                     iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - H_MASS + CO_MASS - nlValuesCterm[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                     if (0 <= iBin && iBin < NUM_BINS)
-                        fScore += fSpectrum[iBin] * nlValuesCterm[i].weighting;
+                        fScore += fSpectrum[iBin] * X_IONS * nlValuesCterm[i].weighting;
                 }
-                if (USE_Y_IONS) {
+                if (Y_IONS != 0) {
                     iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - nlValuesCterm[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                     if (0 <= iBin && iBin < NUM_BINS)
-                        fScore += fSpectrum[iBin] * nlValuesCterm[i].weighting;
+                        fScore += fSpectrum[iBin] * Y_IONS * nlValuesCterm[i].weighting;
                 }
-                if (USE_Z_IONS) {
+                if (Z_IONS != 0) {
                     iBin = (int) ((baseMass - nTermFragMass + PROTON_MASS*(iCharge-1) - NH3_MASS - nlValuesCterm[i].massDelta) / iCharge / FRAGMENT_TOLERANCE + FRAGMENT_BIN_OFFSET);
                     if (0 <= iBin && iBin < NUM_BINS)
-                        fScore += fSpectrum[iBin] * nlValuesCterm[i].weighting;
+                        fScore += fSpectrum[iBin] * Z_IONS * nlValuesCterm[i].weighting;
                 }
             }
 #endif
@@ -322,6 +308,7 @@ __kernel void cl_reduce_scores_sequential(int iNumScores, __global cObj* cCandid
                 for (c=0; c<cCandidates[i].iPeptideLength; c++)
                     mPSMs[j].sPeptide[c] = cCandidates[i].sPeptide[c];
                 mPSMs[j].sPeptide[c] = '\0';
+                mPSMs[j].decoy = cCandidates[i].decoy;
                 mPSMs[j].ntermMod = cCandidates[i].ntermMod;
                 mPSMs[j].ctermMod = cCandidates[i].ctermMod;
                 mPSMs[j].fPeptideMass = cCandidates[i].fPeptideMass;
@@ -329,8 +316,7 @@ __kernel void cl_reduce_scores_sequential(int iNumScores, __global cObj* cCandid
                 mPSMs[j].iProtein = cCandidates[i].iProtein;
                 mPSMs[j].cBefore = cCandidates[i].cBefore;
                 mPSMs[j].cAfter = cCandidates[i].cAfter;
-                mPSMs[j].iNumOccurrences = 1;
-
+                mPSMs[j].iNumOccurrences = !cCandidates[i].decoy; //don't count decoys as occurrences
                 break;
             }
             else if (score == topNScores[j]) {
@@ -338,9 +324,15 @@ __kernel void cl_reduce_scores_sequential(int iNumScores, __global cObj* cCandid
                 while (aa<mPSMs[j].iPeptideLength && (mPSMs[j].sPeptide[aa] == cCandidates[i].sPeptide[aa]))
                     aa++;
                 if (mPSMs[j].sPeptide[aa] == cCandidates[i].sPeptide[aa]) {
-                    //duplicate found: report lowest protein ID and increment occurrences
-                    mPSMs[j].iProtein = min(mPSMs[j].iProtein, cCandidates[i].iProtein);
-                    mPSMs[j].iNumOccurrences += 1;
+                    //duplicate found: report lowest non-decoy protein ID and increment occurrences
+                    if (!(!mPSMs[j].decoy && cCandidates[i].decoy)) {
+                        if (cCandidates[i].iProtein < mPSMs[j].iProtein) { 
+                            mPSMs[j].iProtein = cCandidates[i].iProtein;
+                            mPSMs[j].cBefore = cCandidates[i].cBefore;
+                            mPSMs[j].cAfter = cCandidates[i].cAfter;
+                        }
+                        mPSMs[j].iNumOccurrences += !cCandidates[i].decoy;
+                    }
                     break;
                 }
             }
@@ -414,6 +406,7 @@ __kernel void cl_reduce_scores_parallel(int iNumScores, __global cObj* cCandidat
                 for (c=0; c<topCandidate.iPeptideLength; c++)
                     mPSMs[i].sPeptide[c] = topCandidate.sPeptide[c];
                 mPSMs[i].sPeptide[c] = '\0';
+                mPSMs[i].decoy = topCandidate.decoy;
                 mPSMs[i].ntermMod = topCandidate.ntermMod;
                 mPSMs[i].ctermMod = topCandidate.ctermMod;
                 mPSMs[i].fPeptideMass = topCandidate.fPeptideMass;
@@ -421,7 +414,7 @@ __kernel void cl_reduce_scores_parallel(int iNumScores, __global cObj* cCandidat
                 mPSMs[i].iProtein = topCandidate.iProtein;
                 mPSMs[i].cBefore = topCandidate.cBefore;
                 mPSMs[i].cAfter = topCandidate.cAfter;
-                mPSMs[i].iNumOccurrences = 1;
+                mPSMs[i].iNumOccurrences = !topCandidate.decoy; //don't count decoys as occurrences
 
                 //currentScore = fScores[0];
                 break;
@@ -431,9 +424,15 @@ __kernel void cl_reduce_scores_parallel(int iNumScores, __global cObj* cCandidat
                 while (aa<mPSMs[i].iPeptideLength && (mPSMs[i].sPeptide[aa] == topCandidate.sPeptide[aa]))
                     aa++;
                 if (mPSMs[i].sPeptide[aa] == topCandidate.sPeptide[aa]) {
-                    //duplicate found: report lowest protein ID and increment occurrences
-                    mPSMs[i].iProtein = min(mPSMs[i].iProtein, topCandidate.iProtein);
-                    mPSMs[i].iNumOccurrences += 1;
+                    //duplicate found: report lowest non-decoy protein ID and increment occurrences
+                    if (!(!mPSMs[i].decoy && topCandidate.decoy)) {
+                        if (topCandidate.iProtein < mPSMs[i].iProtein) {
+                            mPSMs[i].iProtein = topCandidate.iProtein;
+                            mPSMs[i].cBefore = topCandidate.cBefore;
+                            mPSMs[i].cAfter = topCandidate.cAfter;
+                        }
+                        mPSMs[i].iNumOccurrences += !topCandidate.decoy;
+                    }
                     break;
                 }
             }

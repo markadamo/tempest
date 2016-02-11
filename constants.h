@@ -28,4 +28,36 @@
 #define H2O_MASS (H_MASS*2 + O_MASS)
 #define CO_MASS  (C_MASS + O_MASS)
 
+// amino acid monoisotopic masses
+#define A_AA_MASS  71.03711378
+#define B_AA_MASS 114.53493523 //Asn|Asp
+#define C_AA_MASS 103.00918451
+#define D_AA_MASS 115.02694302
+#define E_AA_MASS 129.04259308
+#define F_AA_MASS 147.06841390
+#define G_AA_MASS  57.02146372
+#define H_AA_MASS 137.05891186
+#define I_AA_MASS 113.08406396
+#define J_AA_MASS   0.0       
+#define K_AA_MASS 128.09496300
+#define L_AA_MASS 113.08406396
+#define M_AA_MASS 131.04048463
+#define N_AA_MASS 114.04292744
+#define O_AA_MASS 237.147727   //Pyrrolysine
+#define P_AA_MASS  97.05276384
+#define Q_AA_MASS 128.05857750
+#define R_AA_MASS 156.10111102
+#define S_AA_MASS  87.03202840
+#define T_AA_MASS 101.04767846
+#define U_AA_MASS 150.953636   //Selenocysteine
+#define V_AA_MASS  99.06841390
+#define W_AA_MASS 186.07931294
+#define X_AA_MASS   0.0       
+#define Y_AA_MASS 163.06332852
+#define Z_AA_MASS 128.55058529 //Glu|Gln
+
+
+
+
+
 #endif

@@ -165,7 +165,7 @@ Device::Device(int platformID, int deviceInd) {
     err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_ADDRESS_BITS,        sizeof(cl_uint),  &(iAddressBits),      NULL);
     err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_HOST_UNIFIED_MEMORY, sizeof(cl_bool),  &(bUnifiedMemory),    NULL); 
     err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_GLOBAL_MEM_SIZE,     sizeof(cl_ulong), &(lGlobalMemSize),    NULL);
-    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_LOCAL_MEM_SIZE,      sizeof(cl_ulong), &(lLocalMemSize),    NULL);
+    err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_LOCAL_MEM_SIZE,      sizeof(cl_ulong), &(lLocalMemSize),     NULL);
     err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_COMPUTE_UNITS,   sizeof(cl_uint),  &(iMaxComputeUnits),  NULL);
     err |= clGetDeviceInfo(clDeviceID, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(cl_ulong), &(lMaxWorkGroupSize), NULL);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to get OpenCL device attributes");
@@ -226,12 +226,12 @@ Device::Device(int platformID, int deviceInd) {
     sprintf(options + strlen(options), "-DMASS_PEPTIDE_NTERM=%f ",     fMassPeptideNterm);
     sprintf(options + strlen(options), "-DMAX_PEPTIDE_LENGTH=%d ",     MAX_PEPTIDE_LENGTH);
     sprintf(options + strlen(options), "-DNUM_INTERNAL_PSMS=%d ",      Tempest::params.numInternalPSMs);
-    sprintf(options + strlen(options), "-DUSE_A_IONS=%d ",             Tempest::params.useAIons);
-    sprintf(options + strlen(options), "-DUSE_B_IONS=%d ",             Tempest::params.useBIons);
-    sprintf(options + strlen(options), "-DUSE_C_IONS=%d ",             Tempest::params.useCIons);
-    sprintf(options + strlen(options), "-DUSE_X_IONS=%d ",             Tempest::params.useXIons);
-    sprintf(options + strlen(options), "-DUSE_Y_IONS=%d ",             Tempest::params.useYIons);
-    sprintf(options + strlen(options), "-DUSE_Z_IONS=%d ",             Tempest::params.useZIons);
+    sprintf(options + strlen(options), "-DA_IONS=%f ",                 Tempest::params.AIons);
+    sprintf(options + strlen(options), "-DB_IONS=%f ",                 Tempest::params.BIons);
+    sprintf(options + strlen(options), "-DC_IONS=%f ",                 Tempest::params.CIons);
+    sprintf(options + strlen(options), "-DX_IONS=%f ",                 Tempest::params.XIons);
+    sprintf(options + strlen(options), "-DY_IONS=%f ",                 Tempest::params.YIons);
+    sprintf(options + strlen(options), "-DZ_IONS=%f ",                 Tempest::params.ZIons);
     sprintf(options + strlen(options), "-DFRAGMENT_TOLERANCE=%f ",     Tempest::params.fFragmentTolerance);
     sprintf(options + strlen(options), "-DFRAGMENT_BIN_OFFSET=%f ",    Tempest::params.fragmentBinOffset);
     sprintf(options + strlen(options), "-DNUM_AA_NL=%d ",              Tempest::params.numAANL);
@@ -544,7 +544,7 @@ void Device::printProfilingData() {
     printf("Total memset time:       %fs\n", (float)totalMemsetTime/1000000000);
     printf("Total build time:        %fs\n", (float)totalBuildTime/1000000000);
     printf("Total transform time:    %fs\n", (float)totalTransformTime/1000000000);
-    //printf("Total send time:         %fs\n", (float)totalSendTime/1000000000);
+    printf("Total send time:         %fs\n", (float)totalSendTime/1000000000);
     printf("Total score time:        %fs\n", (float)totalScoreTime/1000000000);
     printf("Total reduce time:       %fs\n", (float)totalReduceTime/1000000000);
     printf("Build launches:          %ld\n", buildLaunches);

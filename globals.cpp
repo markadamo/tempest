@@ -11,10 +11,11 @@
 //	Variables
 //==================================================================================================
 
-struct ARGS   Tempest::args = {0};
+// zero-initialize variables and arrays in structs
+struct ARGS   Tempest::args   = {0};
 struct PARAMS Tempest::params = {0};
 struct CONFIG Tempest::config = {0};
-struct DATA   Tempest::data = {0};
+struct DATA   Tempest::data   = {0};
 
 //==================================================================================================
 //	Functions
@@ -34,17 +35,15 @@ extern void Tempest::initialize_globals()
     Tempest::args.sParams = 0;
     Tempest::args.sConfig = 0;
     Tempest::args.sOut = 0;
-    Tempest::args.bSplitOutput = 0;
     Tempest::args.iPrintLevel = 1;
     Tempest::args.bPrintCandidates = 0;
-    Tempest::args.bNoDigest = 0;
-    Tempest::args.bNoMatch = 0;
-    Tempest::args.bNoScore = 0;
     Tempest::args.deviceOverride = 0;
     Tempest::args.hostMemOverride = 0;
     Tempest::args.deviceMemOverride = 0;
 	
     //params
+    Tempest::params.sSpectra = 0;
+    Tempest::params.sFasta = 0;
     Tempest::params.iDigestSpecificity = -1;
     Tempest::params.iDigestMaxMissedCleavages = 2;
     Tempest::params.iMinPeptideLength = 5;
@@ -57,12 +56,12 @@ extern void Tempest::initialize_globals()
     Tempest::params.numAANL = 0;
     Tempest::params.numNtermNL = 0;
     Tempest::params.numCtermNL = 0;
-    Tempest::params.useAIons = false;
-    Tempest::params.useBIons = false;
-    Tempest::params.useCIons = false;
-    Tempest::params.useXIons = false;
-    Tempest::params.useYIons = false;
-    Tempest::params.useZIons = false;
+    Tempest::params.AIons = 0.0;
+    Tempest::params.BIons = 0.0;
+    Tempest::params.CIons = 0.0;
+    Tempest::params.XIons = 0.0;
+    Tempest::params.YIons = 0.0;
+    Tempest::params.ZIons = 0.0;
     Tempest::params.dPeptideNtermMass = 0.0;
     Tempest::params.dPeptideCtermMass = 0.0;
     Tempest::params.dProteinNtermMass = 0.0;
@@ -99,32 +98,33 @@ extern void Tempest::initialize_globals()
     Tempest::data.tStart = time(0);
     
     for (int offset=0; ('Z'+offset)<256; offset+=32) {
-        // amino-acids monoisotopic mass
-        Tempest::params.dMassAA['A'+offset] =  71.03711378;
-        Tempest::params.dMassAA['B'+offset] = 114.53493523;
-        Tempest::params.dMassAA['C'+offset] = 103.00918451;
-        Tempest::params.dMassAA['D'+offset] = 115.02694302;
-        Tempest::params.dMassAA['E'+offset] = 129.04259308;
-        Tempest::params.dMassAA['F'+offset] = 147.06841390;
-        Tempest::params.dMassAA['G'+offset] =  57.02146372;
-        Tempest::params.dMassAA['H'+offset] = 137.05891186;
-        Tempest::params.dMassAA['I'+offset] = 113.08406396;
-        Tempest::params.dMassAA['J'+offset] =   0.0;
-        Tempest::params.dMassAA['K'+offset] = 128.09496300;
-        Tempest::params.dMassAA['L'+offset] = 113.08406396;
-        Tempest::params.dMassAA['M'+offset] = 131.04048463;
-        Tempest::params.dMassAA['N'+offset] = 114.04292744;
-        Tempest::params.dMassAA['O'+offset] = 114.07931294;
-        Tempest::params.dMassAA['P'+offset] =  97.05276384;
-        Tempest::params.dMassAA['Q'+offset] = 128.05857750;
-        Tempest::params.dMassAA['R'+offset] = 156.10111102;
-        Tempest::params.dMassAA['S'+offset] =  87.03202840;
-        Tempest::params.dMassAA['T'+offset] = 101.04767846;
-        Tempest::params.dMassAA['U'+offset] = 150.04344;
-        Tempest::params.dMassAA['V'+offset] =  99.06841390;
-        Tempest::params.dMassAA['W'+offset] = 186.07931294;
-        Tempest::params.dMassAA['Y'+offset] = 163.06332852;
-        Tempest::params.dMassAA['Z'+offset] = 128.55058529;
+        // amino acid monoisotopic masses (see constants.h)
+        Tempest::params.dMassAA['A'+offset] = A_AA_MASS;
+        Tempest::params.dMassAA['B'+offset] = B_AA_MASS;
+        Tempest::params.dMassAA['C'+offset] = C_AA_MASS;
+        Tempest::params.dMassAA['D'+offset] = D_AA_MASS;
+        Tempest::params.dMassAA['E'+offset] = E_AA_MASS;
+        Tempest::params.dMassAA['F'+offset] = F_AA_MASS;
+        Tempest::params.dMassAA['G'+offset] = G_AA_MASS;
+        Tempest::params.dMassAA['H'+offset] = H_AA_MASS;
+        Tempest::params.dMassAA['I'+offset] = I_AA_MASS;
+        Tempest::params.dMassAA['J'+offset] = J_AA_MASS;
+        Tempest::params.dMassAA['K'+offset] = K_AA_MASS;
+        Tempest::params.dMassAA['L'+offset] = L_AA_MASS;
+        Tempest::params.dMassAA['M'+offset] = M_AA_MASS;
+        Tempest::params.dMassAA['N'+offset] = N_AA_MASS;
+        Tempest::params.dMassAA['O'+offset] = O_AA_MASS;
+        Tempest::params.dMassAA['P'+offset] = P_AA_MASS;
+        Tempest::params.dMassAA['Q'+offset] = Q_AA_MASS;
+        Tempest::params.dMassAA['R'+offset] = R_AA_MASS;
+        Tempest::params.dMassAA['S'+offset] = S_AA_MASS;
+        Tempest::params.dMassAA['T'+offset] = T_AA_MASS;
+        Tempest::params.dMassAA['U'+offset] = U_AA_MASS;
+        Tempest::params.dMassAA['V'+offset] = V_AA_MASS;
+        Tempest::params.dMassAA['W'+offset] = W_AA_MASS;
+        Tempest::params.dMassAA['X'+offset] = X_AA_MASS;
+        Tempest::params.dMassAA['Y'+offset] = Y_AA_MASS;
+        Tempest::params.dMassAA['Z'+offset] = Z_AA_MASS;
 
         Tempest::params.unModAA['A'+offset] = 'A';
         Tempest::params.unModAA['B'+offset] = 'B';
@@ -149,6 +149,7 @@ extern void Tempest::initialize_globals()
         Tempest::params.unModAA['U'+offset] = 'U';
         Tempest::params.unModAA['V'+offset] = 'V';
         Tempest::params.unModAA['W'+offset] = 'W';
+        Tempest::params.unModAA['X'+offset] = 'X';
         Tempest::params.unModAA['Y'+offset] = 'Y';
         Tempest::params.unModAA['Z'+offset] = 'Z';
     }

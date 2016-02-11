@@ -19,16 +19,17 @@
 #include <time.h>
 #include <vector>
 #include <stack>
+#include <set>
 #include <map>
 
-typedef off_t f_off; //MSToolkit
+typedef off_t f_off; //for MSToolkit
 #include "MSReader.h"
 #include "Spectrum.h"
 #include "MSObject.h"
 
 #include "constants.h" //molecular masses
 
-#define VERSION_STRING "1.0"
+#define VERSION_STRING "2.0"
 #define LICENSE_STRING "(c) 2009 Dartmouth College"
 #define AUTHORS_STRING "Mark Adamo, Jeffrey Milloy, Brendan Faherty"
 
@@ -77,6 +78,7 @@ typedef struct cobject {
     int    iProtein;
     float  fPeptideMass;
 
+    char   decoy; // bool (for internal decoy_search)
     unsigned char iPeptideLength;
     char   ntermMod; //values from 0 to 5
     char   ctermMod; //values from 0 to 5
@@ -93,7 +95,8 @@ typedef struct mobject {
     float  fPeptideMass;
     float  fScore;
     int    iProtein;
-    
+
+    char   decoy; // bool (for internal decoy_search)
     char   ntermMod; //values from 0 to 5
     char   ctermMod; //values from 0 to 5
     char   cBefore;
@@ -144,17 +147,21 @@ struct ARGS {
 
     int iPrintLevel;
     bool bPrintCandidates;
-    bool bSplitOutput;
-    bool bNoDigest;
-    bool bNoMatch;
-    bool bNoScore;
 
-  bool deviceOverride;
-  bool hostMemOverride;
-  bool deviceMemOverride;
+    bool deviceOverride;
+    bool hostMemOverride;
+    bool deviceMemOverride;
 };
 
 struct PARAMS {
+    //files
+    char *sFasta;
+    char *sSpectra;
+    char *sOut;
+
+    //decoys
+    bool decoySearch;
+    
     //static AA masses
     double dMassAA[256];
     
@@ -189,20 +196,25 @@ struct PARAMS {
     int numNtermModSites;
     char ntermModSymbols[5];
     float ntermModMasses[5];
+    bool ntermModProtein[5];
     int numCtermModSites;
     char ctermModSymbols[5];
     float ctermModMasses[5];
+    bool ctermModProtein[5];
     std::vector<nlValue> nlValuesNterm;
     std::vector<nlValue> nlValuesCterm;
     std::vector<nlValue> nlValuesAA;
     
     //ion series
-    bool useAIons;
-    bool useBIons;
-    bool useCIons;
-    bool useXIons;
-    bool useYIons;
-    bool useZIons;
+    float AIons;
+    float BIons;
+    float CIons;
+    float XIons;
+    float YIons;
+    float ZIons;
+
+    //MS level
+    std::set<int> msLevels;
 
     double dPeptideNtermMass;
     double dPeptideCtermMass;
@@ -339,7 +351,6 @@ private:
     long totalBuildTime;
     long totalTransformTime;
     long totalMemsetTime;
-    long totalSendTime;
     long buildLaunches;
     long scoreKernelLaunches;
     long lastBuildIndex;
@@ -371,6 +382,7 @@ public:
     cl_event newEvent();
     int get_mPSMs(mObj* destination);
     int get_fNextScores(float* destination);
+    long totalSendTime;
     void printProfilingData();
 };
 
@@ -401,10 +413,11 @@ namespace Tempest {
 
     // input.cpp
     extern void parse_input(int, char **);
+    extern void usage();
 
     // output.cpp
     extern void write_psms(void);
-    extern void write_log(void);
+    extern void write_log(int, char**);
     // params.cpp
     extern void parse_params();
 
@@ -427,12 +440,7 @@ namespace Tempest {
     extern void cleanup_device(void);
 
     // util.cpp
-    extern int n_choose_k(int,int);
     extern long mround(long, int);
-    extern const char *byte_to_binary(unsigned int);
-    extern int count_set_bits(unsigned int);
-    extern unsigned long hash(char*);
-    extern unsigned long hashn(char*, int);
     extern unsigned char toMod(char c, int modInd);
     extern int getModInd(unsigned char c);
     extern bool backboneMatch(mObj m1, mObj m2);
