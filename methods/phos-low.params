@@ -1,0 +1,21 @@
+
+digest_definition			KR P 1
+digest_specificity			2
+digest_missed_cleavages		3
+digest_length 				5-64
+
+fixed_modification			C 57.021460
+variable_modification 		M * 15.994910
+variable_modification		STY # 79.966330
+variable_modifications_max	4
+
+precursor_tolerance 		1 Da
+msms_fragment_tolerance 	1.005 mz
+
+similarity_score 			xcorr
+duplicate_peaks				max
+theoretical_flanking 		0
+theoretical_nl				1
+theoretical_phos_nl 		1
+num_output_psms				1
+fix_delta_score				1

@@ -1,0 +1,30 @@
+digest_definition		KR P 1
+digest_specificity		2
+digest_missed_cleavages		3
+digest_length 			5 64
+digest_mass_range		400 5000
+
+fixed_modification		C 57.021460
+variable_modification           STY # 79.966330
+variable_modification 		M * 15.994910
+variable_modifications_max	4
+
+>neutral_loss			# 97.97689509 1.0
+
+use_a_ions			0
+use_b_ions			1
+use_c_ions			0
+use_x_ions			0
+use_y_ions			1
+use_z_ions			0
+
+precursor_tolerance 		1 Da
+fragment_tolerance	 	0.02 mz
+fragment_bin_offset		0.0
+normalization_regions		10
+msms_remove_precursor		0
+
+xcorr_transform_width 			0
+flanking_intensity 			0.5
+num_internal_psms			10
+num_output_psms				10

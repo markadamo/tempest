@@ -1,9 +1,9 @@
 CC=g++
 override CFLAGS=-g -O3 #-fsanitize=address
-SOURCES=$(wildcard *.cpp)
+SOURCES=$(wildcard source/*.cpp)
 #OBJECTS=$(SOURCES:.c=.o)
-MSTOOLKIT=MSToolkit
-INC_DIRS=MSToolkit/include
+MSTOOLKIT=mstoolkit
+INC_DIRS=mstoolkit/include
 LIB_DIRS=$(MSTOOLKIT)
 LIBS=-lmstoolkitlite #-lasan
 EXECUTABLE=tempest
@@ -57,7 +57,7 @@ endif
 #all: $(SOURCES) $(EXECUTABLE)
 
 all:
-	cd MSToolkit; make; cd ..
+	cd mstoolkit; make lite; cd ..
 	$(CC) $(CFLAGS) $(SOURCES) $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS) -o $(EXECUTABLE)
 
 print-%:

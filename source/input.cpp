@@ -76,7 +76,7 @@ extern void Tempest::usage() {
     printf("\nOPTIONS\n");
     printf("    -i <PATH>              spectra file (override method\n");
     printf("    -f <PATH>              fasta database (override method)\n");
-    printf("    -m <PATH>              method file (default: tempest.method)\n");
+    printf("    -m <PATH>              method file (default: method.params)\n");
     printf("    -c <PATH>              config file (default: tempest.config)\n");
     printf("    -o <PATH>              output file (default: <spectra path>.tsv)\n");
     printf("    -d <N:N>               OpenCL platform:device to use (override config)\n");

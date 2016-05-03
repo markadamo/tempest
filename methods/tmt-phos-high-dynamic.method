@@ -1,0 +1,42 @@
+
+digest_definition		KR P 1
+digest_specificity		2
+digest_missed_cleavages		3
+digest_length 			5 64
+digest_mass_range		400 5000
+
+decoy_search			1
+
+spectra_file /orion/glpp/projects/tempestcl2/tmt_phos_30K_f04747.mzXML
+database_file /orion/glpp/projects/tempest/fasta/human_forward.fasta
+
+fixed_modification		C 57.021460
+variable_modification		peptide-nterm @ 229.16293200
+variable_modification	        K @ 229.16293200
+variable_modification           STY # 79.966330
+variable_modification 		M * 15.994910
+variable_modifications_max	4
+
+neutral_loss			# 97.97689509 1.0
+>neutral_loss			nterm 154.1187 1.0
+>neutral_loss			STED 18.0105647 0.2
+>neutral_loss			RKNQ 17.02654911 0.2
+
+a_ions			0
+b_ions			1
+c_ions			0
+x_ions			0
+y_ions			1
+z_ions			0
+
+precursor_tolerance 		12 ppm
+fragment_bin_width	 	0.02
+fragment_bin_offset		0.0
+normalization_regions		20
+msms_remove_precursor		0
+msms_remove_mz_range		126.0 131.8
+
+xcorr_transform_width 			0
+flanking_intensity 			0.5
+num_internal_psms			25
+num_output_psms				10
