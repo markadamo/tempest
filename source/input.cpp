@@ -47,7 +47,7 @@ extern void Tempest::parse_input(int argc, char **argv) {
         Tempest::args.sParams = DEFAULT_PARAMS_FILE;
     }
     if (0 == (fp = (FILE *) fopen(Tempest::args.sParams, "r"))) {
-        fprintf(stderr, "\nERROR\tUnable to open method file %s: %s\n", Tempest::args.sParams, strerror(errno));
+        fprintf(stderr, "\nERROR\tUnable to open method file %s: %s\n\tNavigate to a working directory with a tempest.method file,\n\tor specify a path to a .method file with the -m argument.\n", Tempest::args.sParams, strerror(errno));
         Tempest::tempest_exit(EXIT_FAILURE);
     }
     fclose(fp);
@@ -57,7 +57,7 @@ extern void Tempest::parse_input(int argc, char **argv) {
         Tempest::args.sConfig = DEFAULT_CONFIG_FILE;
     }
     if (0 == (fp = (FILE *) fopen(Tempest::args.sConfig, "r"))) {
-        fprintf(stderr, "\nERROR\tUnable to open config file %s: %s\n", Tempest::args.sConfig, strerror(errno));
+        fprintf(stderr, "\nERROR\tUnable to open config file %s: %s\n\tNavigate to a working directory with a tempest.config file,\n\tor specify a path to a .config file with the -c argument.\n", Tempest::args.sConfig, strerror(errno));
         Tempest::tempest_exit(EXIT_FAILURE);
     }
     fclose(fp);
@@ -72,9 +72,9 @@ extern void Tempest::parse_input(int argc, char **argv) {
  */
 
 extern void Tempest::usage() {
-    printf("\nUSAGE tempest [options] -i <spectra_file> -f <FASTA_file>\n");
+    printf("\nUSAGE tempest [options]\n");
     printf("\nOPTIONS\n");
-    printf("    -i <PATH>              spectra file (override method\n");
+    printf("    -i <PATH>              spectra file (override method)\n");
     printf("    -f <PATH>              fasta database (override method)\n");
     printf("    -m <PATH>              method file (default: tempest.method)\n");
     printf("    -c <PATH>              config file (default: tempest.config)\n");
@@ -120,10 +120,8 @@ void set_short_argument(char arg, char *value) {
         Tempest::config.maxScan = atoi(token);
         break;
     case 'L': Tempest::args.iPrintLevel = atoi(value); break;
-    case 'V': version();
-        Tempest::tempest_exit(EXIT_SUCCESS); break;
-    case 'H': Tempest::usage();
-        Tempest::tempest_exit(EXIT_SUCCESS); break;
+    case 'V': version(); Tempest::tempest_exit(EXIT_SUCCESS); break;
+    case 'H': Tempest::usage(); Tempest::tempest_exit(EXIT_SUCCESS); break;
     default:
         fprintf(stderr, "\nERROR\tUnknown argument (%c)\n", arg);
         Tempest::usage();
