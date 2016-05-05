@@ -1,0 +1,152 @@
+> Tempest v2.0 method file (basic tryptic high-res search)
+> Text following a '>' character is commented out.
+> Run 'tempest --device-info' to see available platforms and devices.
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+> Parameter guide                                                              
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+> spectra_file               <path>
+>                            | (Optional) Give an absolute path to the spectra input file (mzXML, mzML, ms2).
+>                            | Optional if overridden by the -i command line option.  
+>
+> database_file              <path>
+>                            | (Optional) Give an absolute path to the FASTA file.
+>                            | Optional if overridden by the -f command line option.
+>                            
+> digest_definition          <sites> <not_sites> <offset>
+>   e.g. Trypsin:            KR      P           1
+>   e.g. Asp-N:              D       -           0
+>                            | Rules for in-silico digest of the protein database.
+>                            | Cleave at any <sites> except when cleavage is adjacent to any <not_sites>
+>                            | If <offset> is set to 0, cleave N-terminally to the cleavage site.
+>                            | If <offset> is set to 1, cleave C-terminally to the cleavage site.
+>                            
+> digest_specificity         <0|1|2>
+>                            | 0 = nonspecific: cleave at any residue and ignore digest_definition.
+>                            | 1 = partially specific: candidate sequences contain at least one enzymatic terminus.
+>                            | 2 = fully specific: candidate sequences must contain two enzymatic termini.
+>
+> digest_missed_cleavages    <n>
+>                            | Allow candidate sequences to have a maximum of <n> internal cleavage sites.
+>
+> digest_length              <min> <max>
+>                            | Limit the number of amino acids in candidate sequences to the range [min, max).
+>                            | Currently, max length cannot exceed 64.
+>
+> digest_mass_range          <min> <max>
+>                            | Limit the mass of candidate sequences to the range [min, max).
+>                            
+> decoy_search               <0|1>
+>                            | If set to 1, conduct a target-decoy search by generating internal decoy sequences.
+>                            | Decoy hits are flagged as such in the search results.
+>                            
+> fixed_modification         <location>    <mass_delta>
+>   e.g. carbamidomethyl C:  C             57.021460
+>   e.g. TMT label:          K             229.16293200
+>   e.g. TMT label:          peptide-nterm 229.16293200
+>                            | (Optional) Alter the base mass of all sites in <location> by +<mass_delta>
+>                            | <location> can be a list of amino acid codes in a contiguous string, or any of the special strings:
+>                            |   peptide-nterm, peptide-cterm, protein-nterm, protein-cterm
+>
+> variable_modification      <location> <symbol> <mass_delta>
+>   e.g. oxidation:          M          *        15.994910
+>   e.g. phosphorylation:    STY        #        79.966330
+>                            | (Optional) Consider each site in <location> both with and without +<mass_delta>
+>                            | Each modification will be annotated in the search results with the selected <symbol>.
+>                            | <location> can be a list of amino acid codes in a contiguous string, or any of the special strings:
+>                            |   peptide-nterm, peptide-cterm, protein-nterm, protein-cterm
+>
+> variable_modifications_max <n>
+>                            | Allow candidate sequences to have a maximum of <n> variably-modified residues.
+>
+> neutral_loss               <location> <mass_delta> <weighting>
+>   e.g. H2O:                STED       18.0105647   0.2
+>   e.g. NH3:                RKNQ       17.02654911  0.2
+>   e.g. phosphate:          #          97.97689509  1.0
+>                            | (Optional) When a theoretical fragment contains one of the sites in <location>, generate an additional theoretical fragment at [fragment mass]-<mass_delta>.
+>                            | Neutral loss fragment scores will be multiplied by <weighting>.
+>                            |  (a <weighting> of 1.0 will weight the NL fragment as highly as a primary fragment)
+>                            | <location> can be a list of amino acid codes in a contiguous string, or any of the special strings:
+>                            |   peptide-nterm, peptide-cterm, protein-nterm, protein-cterm
+>                            | <location> can also include previously-defined variable_modification symbols.
+>
+> <a|b|c|x|y|z>_ions         <weighting>
+>                            | Score the specified ion series and multiply its theoretical fragment matches by <weighting>.
+>
+> precursor_tolerance        <tol> <Da|ppm>
+>   e.g. wide-window:        1     Da
+>   e.g. narrow-window:      12    ppm
+>                            | Tolerance for matching candidate sequences against spectra precursor masses. Specify Da or ppm.
+>
+> fragment_bin_width         <width>
+>   e.g. high-res:           0.02
+>   e.g. low-res:            1.0005
+>                            | MS2 bin width in m/z.
+>
+> fragment_bin_offset        <offset>
+>   e.g. high-res:           0.0
+>   e.g. low-res:            0.68
+>                            | Shift MS2 bins to the right by <offset>*<fragment_tolerance>. Value should be between 0.0 and 1.0.
+>
+> normalization_regions      <n>
+>                            | Number of normalization regions used in MS/MS spectrum preprocessing.
+>
+> msms_remove_precursor      <0|1>
+>                            | If set to 1, remove MS2 peaks matching the precursor mass (using a tolerance of fragment_tolerance).
+>
+> msms_remove_mz_range       <min> <max>
+>   e.g. TMT reporters       126.0 131.8
+>                            | Remove MS2 peaks in the m/z range [<min>, <max>]
+>                            
+> xcorr_transform_width      <width>
+>   e.g. high-res:           0
+>   e.g. low-res:            75
+>                            | Width of SEQUEST-style xcorr transformation for MS2 spectra.
+>
+> flanking_intensity         <f>
+>   e.g. high-res:           0.5
+>   e.g. low-res:            0.0
+>                            | Propagate a proportion of each MS2 bin's intensity into the two bins directly flanking it.
+>                            | Value should be between 0.0 and 1.0
+>
+> num_internal_psms          <n>
+>                            | Track <n> top-scoring PSMs per spectrum internally.
+>                            | Value must be at least 2 in order to compute dcn.
+>
+> num_output_psms            <n>
+>                            | Report up to <n> top-scoring PSMs per spectrum in the search results.
+>                            | Value cannot exceed num_internal_psms.
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+spectra_file                /absolute/path/to/spectra.mzXML 
+database_file               /absolute/path/to/db.fasta
+
+digest_definition           KR P 1
+digest_specificity		    2
+digest_missed_cleavages		3
+digest_length 			    5 64
+digest_mass_range		    400 5000
+
+decoy_search			    1
+
+fixed_modification          C 57.021460
+variable_modification 		M * 15.994910
+variable_modifications_max	4
+
+a_ions			            0.0
+b_ions			            1.0
+c_ions			            0.0
+x_ions			            0.0
+y_ions			            1.0
+z_ions			            0.0
+
+precursor_tolerance         1 Da
+fragment_bin_width	 	    0.02
+fragment_bin_offset		    0.0
+normalization_regions		20
+msms_remove_precursor		1
+
+xcorr_transform_width 		0
+flanking_intensity 			0.5
+num_internal_psms			10
+num_output_psms				10
