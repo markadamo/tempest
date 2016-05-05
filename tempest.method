@@ -122,31 +122,31 @@ spectra_file                /absolute/path/to/spectra.mzXML
 database_file               /absolute/path/to/db.fasta
 
 digest_definition           KR P 1
-digest_specificity		    2
-digest_missed_cleavages		3
-digest_length 			    5 64
-digest_mass_range		    400 5000
+digest_specificity          2
+digest_missed_cleavages     3
+digest_length               5 64
+digest_mass_range           400 5000
 
-decoy_search			    1
+decoy_search                1
 
 fixed_modification          C 57.021460
-variable_modification 		M * 15.994910
-variable_modifications_max	4
+variable_modification       M * 15.994910
+variable_modifications_max  4
 
-a_ions			            0.0
-b_ions			            1.0
-c_ions			            0.0
-x_ions			            0.0
-y_ions			            1.0
-z_ions			            0.0
+a_ions                      0.0
+b_ions                      1.0
+c_ions                      0.0
+x_ions                      0.0
+y_ions                      1.0
+z_ions                      0.0
 
 precursor_tolerance         1 Da
-fragment_bin_width	 	    0.02
-fragment_bin_offset		    0.0
-normalization_regions		20
-msms_remove_precursor		1
+fragment_bin_width          0.02
+fragment_bin_offset         0.0
+normalization_regions       20
+msms_remove_precursor       1
 
-xcorr_transform_width 		0
-flanking_intensity 			0.5
-num_internal_psms			10
-num_output_psms				10
+xcorr_transform_width       0
+flanking_intensity          0.5
+num_internal_psms           10
+num_output_psms             10
