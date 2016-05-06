@@ -97,6 +97,10 @@
 > msms_remove_mz_range       <min> <max>
 >   e.g. TMT reporters       126.0 131.8
 >                            | Remove MS2 peaks in the m/z range [<min>, <max>]
+>
+> intensity_threshold        <f>
+>                            | Noise filter: discard MS2 peaks below a proportion <f> of the spectrum base beak intensity.
+>                            | Value should be between 0.0 and 1.0
 >                            
 > xcorr_transform_width      <width>
 >   e.g. high-res:           0
@@ -106,7 +110,7 @@
 > flanking_intensity         <f>
 >   e.g. high-res:           0.5
 >   e.g. low-res:            0.0
->                            | Propagate a proportion of each MS2 bin's intensity into the two bins directly flanking it.
+>                            | Propagate a proportion <f> of each MS2 bin's intensity into the two bins directly flanking it.
 >                            | Value should be between 0.0 and 1.0
 >
 > num_internal_psms          <n>
@@ -127,7 +131,7 @@ digest_missed_cleavages     3
 digest_length               5 64
 digest_mass_range           400 5000
 
-decoy_search                1
+decoy_search                0
 
 fixed_modification          C 57.021460
 variable_modification       M * 15.994910
@@ -145,6 +149,7 @@ fragment_bin_width          0.02
 fragment_bin_offset         0.0
 normalization_regions       20
 msms_remove_precursor       1
+intensity_threshold         0.0
 
 xcorr_transform_width       0
 flanking_intensity          0.5

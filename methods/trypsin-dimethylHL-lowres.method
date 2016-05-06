@@ -1,0 +1,31 @@
+> [6] "dimethyl"
+digest_definition KR P 1
+digest_specificity 2
+digest_missed_cleavages 3
+digest_length 5 64
+digest_mass_range 600 5000
+
+decoy_search 0
+
+variable_modifications_max 4
+fixed_modification C 57.02146000
+fixed_modification K 28.03130000
+fixed_modification peptide-nterm 28.03130000
+variable_modification M * 15.99491000
+variable_modification K @ 8.04437000
+variable_modification peptide-nterm @ 8.04437015
+
+
+b_ions 1.0
+y_ions 1.0
+
+precursor_tolerance 1.000000 Da
+fragment_bin_width 1.000500
+fragment_bin_offset 0.680000
+
+msms_remove_precursor 0
+normalization_regions 10
+xcorr_transform_width 75
+
+num_internal_psms 10
+num_output_psms 10

@@ -1,0 +1,30 @@
+> [78] "TMT-All "
+digest_definition KR P 1
+digest_specificity 2
+digest_missed_cleavages 3
+digest_length 5 64
+digest_mass_range 350 5000
+
+decoy_search 0
+
+variable_modifications_max 4
+fixed_modification C 57.02146000
+fixed_modification peptide-nterm 229.16293200
+fixed_modification K 229.16293200
+variable_modification M * 15.99491000
+
+
+b_ions 1.0
+y_ions 1.0
+
+precursor_tolerance 1.000000 Da
+fragment_bin_width 0.020000
+fragment_bin_offset 0.000000
+
+msms_remove_precursor 1
+normalization_regions 20
+msms_remove_mz_range 126.0 131.8
+flanking_intensity 0.500000
+
+num_internal_psms 10
+num_output_psms 10
