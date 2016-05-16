@@ -61,10 +61,6 @@ extern void Tempest::parse_input(int argc, char **argv) {
         Tempest::tempest_exit(EXIT_FAILURE);
     }
     fclose(fp);
-
-    // Out file
-    if (!Tempest::args.sOut)
-        Tempest::args.sOut = strdup_s(Tempest::args.sSpectra);
 }
 
 /*

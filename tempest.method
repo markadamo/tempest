@@ -1,6 +1,5 @@
 > Tempest v2.0 method file (basic tryptic high-res search)
 > Text following a '>' character is commented out.
-> Run 'tempest --device-info' to see available platforms and devices.
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 > Parameter guide                                                              
@@ -72,6 +71,11 @@
 >
 > <a|b|c|x|y|z>_ions         <weighting>
 >                            | Score the specified ion series and multiply its theoretical fragment matches by <weighting>.
+>
+> ms_level                   <1|2|3>
+>                            | Score candidate peptides against scans at the specified MS level: MS1, MS2, or MS3.
+>                            | Enter multiple ms_level lines to search scans at multiple MS levels.
+>                            | By default, only MS2 scans will be searched if this parameter is omitted.
 >
 > precursor_tolerance        <tol> <Da|ppm>
 >   e.g. wide-window:        1     Da

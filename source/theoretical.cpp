@@ -36,6 +36,7 @@ extern void Tempest::search_fasta_database()
     }
 
     // calculate peptide mass range
+    // TODO: change if we allow negative mod masses
     float fMaxAAModMass = 0.0f;
     for (i=0; i<Tempest::params.iNumMods; i++) {
         if (Tempest::params.tMods[i].cSymbol && Tempest::params.tMods[i].dMassDiff > fMaxAAModMass)
@@ -291,7 +292,7 @@ void digest_protein(int iProtein, int iLengthProtein, char *sProteinSequence)
                 }
             }
             
-            // too short or too small?
+            // too short?
             if (iPeptideLength < Tempest::params.iMinPeptideLength) {
                 continue;
             }
@@ -386,6 +387,10 @@ void parse_reference(char* sLine, char* sReference) {
 }
 
 void gen_candidates(cObj cCandidate, bool ntermMod, bool proteinNterm, bool ctermMod, bool proteinCterm, int* modInds, int modIndsLeft, int modCount) {
+    // too large (no spectra to match it)?
+    // TODO: change if we allow negative mod masses
+    if (cCandidate.fPeptideMass > Tempest::data.dMaxPeptideMass)
+        return;
     if (modCount >= Tempest::params.iModificationsMax)
         store_candidate(cCandidate);
     else if (modIndsLeft > 0) {

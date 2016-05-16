@@ -213,7 +213,11 @@ extern void Tempest::parse_params() {
                 fprintf(stderr, "\nERROR: Invalid modification symbol (nonprintable): ascii %d\n\t>%s", (short) cSymbol, sLine);
                 Tempest::tempest_exit(EXIT_FAILURE);
             }
-
+            //validate mass (currently cannot be negative)
+            else if (dMassDiff < 0) {
+                fprintf(stderr, "\nERROR: Negative variable modification masses are currently unsupported.\n\t>%s", sLine);
+                Tempest::tempest_exit(EXIT_FAILURE);
+            }
             //validate location and update masses/symbols
             if (strcmp(sLocation, "nterm") == 0 || strcmp(sLocation, "peptide-nterm") == 0 || strcmp(sLocation, "protein-nterm") == 0) {
                 if (Tempest::params.numNtermModSites >= 5) {
@@ -631,11 +635,14 @@ extern void Tempest::parse_params() {
         fprintf(stderr, "\nERROR: Unable to open fasta database %s: %s\n", fastaFile, strerror(errno));
         Tempest::tempest_exit(EXIT_FAILURE);
     }
+
+    //set to default output file path if none was specified
+    if (!Tempest::args.sOut)
+        Tempest::args.sOut = strdup_s(Tempest::args.sSpectra);
     
     //silently correct input where numOutputPSMs > numInternalPSMs
     if (Tempest::params.numInternalPSMs < Tempest::params.numOutputPSMs)
         Tempest::params.numOutputPSMs = Tempest::params.numInternalPSMs;
-        
 }
 
 void append_mod(char cAminoAcid, int modInd, double dMassDiff, char cSymbol) {

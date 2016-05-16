@@ -76,7 +76,7 @@ extern void Tempest::write_psms()
         for (e = Tempest::data.eScanIndex[iBin]; e; e = e->next) {
             // skip if no results
             if (0 == e->iNumCandidates) {
-                fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
+                //fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
                 continue;
             }
             
@@ -86,8 +86,8 @@ extern void Tempest::write_psms()
             fPrevScore = FLT_MAX;
             for (i=0; i < Tempest::params.numOutputPSMs; i++) {
                 if (mScanPSMs[i].fScore <= 0.0f) {
-                    if (i==0)
-                        fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
+                    //if (i==0)
+                        //fprintf(stderr, "WARNING\tno results for %s\n", e->sName);
                     break;
                 }
 
