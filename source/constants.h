@@ -3,7 +3,6 @@
 
 //peak bin intensity weighting
 #define PRIMARY_INTENSITY 50
-#define FLANKING_INTENSITY 25
 
 // constants
 #define PROTON_MASS     1.00727646688

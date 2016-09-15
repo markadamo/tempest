@@ -46,9 +46,6 @@ extern void Tempest::write_psms()
     err = 0;
     for (int i=0; i<Tempest::config.iDevices.size(); i++)
         err |= Tempest::devices[i]->get_mPSMs(mPSMs);
-    //cudaMemcpy(mPSMs, gpu_mPSMs, sizeof(mObj)*Tempest::data.iNumSpectra*Tempest::params.iNumOutputPSMs, cudaMemcpyDeviceToHost);
-    //err |= Tempest::devices[0]->get_fNextScores(fNextScores);
-    //cudaMemcpy(fNextScores, gpu_fNextScores, sizeof(float)*Tempest::data.iNumSpectra, cudaMemcpyDeviceToHost);
     Tempest::check_cl_error(__FILE__, __LINE__, err, "Unable to transfer results from the device");
     
     // setup single output file

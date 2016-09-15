@@ -1,11 +1,9 @@
-# tempest
-OpenCL MS/MS database search
+# tempest #
+###### OpenCL MS/MS database search ######
 
 The included executable has been compiled for 64-bit linux, compatible with glibc version 2.12 or higher. 
 
-+----------+
-| Building |
-+----------+
+### Building ###
 In order to build, Tempest requires the MSToolkit source in a directory called 'mstoolkit'. If you have git, run the following command from the tempest root directory:
 
     git clone https://github.com/mhoopmann/mstoolkit
